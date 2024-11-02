@@ -13,19 +13,50 @@ namespace MusicPlayer.Services
     public class MusicMetadataService
     {
         private readonly HttpClient _httpClient;
+        private readonly MetadataCacheService _cacheService;
 
-        public MusicMetadataService()
+        public MusicMetadataService(MetadataCacheService metadataCacheService)
         {
             _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "MusicPlayer/1.0");
+            _cacheService = metadataCacheService;
         }
 
-        public async Task<ImageSource?> GetArtistImageAsync(string artistName)
+        public async Task<BitmapImage> GetArtistImageAsync(string artist)
+        {
+            if (string.IsNullOrEmpty(artist)) return null;
+
+            // Check cache first
+            var cachedArtist = _cacheService.GetArtistInfo(artist);
+            if (cachedArtist != null)
+            {
+                return cachedArtist.ArtistImage;
+            }
+
+            try
+            {
+                // If not in cache, fetch from API
+                var artistImage = await FetchArtistImageFromApi(artist);
+                if (artistImage != null)
+                {
+                    _cacheService.CacheArtistInfo(artist, artistImage);
+                }
+                return artistImage;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error fetching artist image: {ex.Message}");
+                return null;
+            }
+        }
+
+        private async Task<BitmapImage> FetchArtistImageFromApi(string artist)
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"Fetching image for artist: {artistName}");
-                var deezerUrl = $"https://api.deezer.com/search/artist?q={Uri.EscapeDataString(artistName)}&limit=1";
+                System.Diagnostics.Debug.WriteLine($"Fetching image for artist: {artist}");
+                // Search for the artist on Deezer, remove the feat part if present
+                artist = artist.Split("feat")[0].Trim();
+                var deezerUrl = $"https://api.deezer.com/search/artist?q={Uri.EscapeDataString(artist)}&limit=1";
 
                 var response = await _httpClient.GetStringAsync(deezerUrl);
                 System.Diagnostics.Debug.WriteLine($"Deezer API Response: {response}");
@@ -35,8 +66,8 @@ namespace MusicPlayer.Services
 
                 if (dataArray.GetArrayLength() > 0)
                 {
-                    var artist = dataArray[0];
-                    var pictureUrl = artist.GetProperty("picture_big").GetString();
+                    var artistImage = dataArray[0];
+                    var pictureUrl = artistImage.GetProperty("picture_big").GetString();
                     System.Diagnostics.Debug.WriteLine($"Found picture URL: {pictureUrl}");
 
                     if (!string.IsNullOrEmpty(pictureUrl))
@@ -88,7 +119,7 @@ namespace MusicPlayer.Services
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine($"No images found for artist: {artistName}");
+                System.Diagnostics.Debug.WriteLine($"No images found for artist: {artist}");
                 return null;
             }
             catch (Exception ex)

@@ -7,11 +7,32 @@ using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using System.Net.Http;
+using System.ComponentModel;
 
 namespace MusicPlayer.Models
 {
-    public class SongInfo
+    public class SongInfo : INotifyPropertyChanged
     {
+        private bool isPlaying;
+        public bool IsPlaying
+        {
+            get => isPlaying;
+            set
+            {
+                if (isPlaying != value)
+                {
+                    isPlaying = value;
+                    OnPropertyChanged(nameof(IsPlaying));
+                }
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
         public string FilePath { get; set; }
         public string Title { get; set; }
         public string Artist { get; set; }
