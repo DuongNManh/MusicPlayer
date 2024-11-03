@@ -6,11 +6,11 @@
         Width="1200"
         MinHeight="600"
         MinWidth="800"
-        Background="#FF121212">
+        Background="#FF282828">
     <Window.Resources>
         <Style TargetType="Button">
             <Setter Property="Background"
-                    Value="#FF282828"/>
+                    Value="Transparent"/>
             <Setter Property="Foreground"
                     Value="White"/>
             <Setter Property="BorderThickness"
@@ -37,22 +37,28 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Setter Property="FontSize"
+                    Value="14"/>
+            <Setter Property="Margin"
+                    Value="5"/>
         </Style>
 
         <Style TargetType="ListBox">
             <Setter Property="Background"
                     Value="#FF282828"/>
             <Setter Property="Foreground"
-                    Value="#FFB3B3B3"/>
+                    Value="White"/>
             <Setter Property="BorderThickness"
                     Value="0"/>
             <Setter Property="Padding"
                     Value="0"/>
+            <Setter Property="FontSize"
+                    Value="14"/>
         </Style>
 
         <Style TargetType="ListBoxItem">
             <Setter Property="Padding"
-                    Value="10,8"/>
+                    Value="12,10"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -194,148 +200,251 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <SolidColorBrush x:Key="PlayingHighlightBrush"
+                         Color="#1DB954"/>
+        <!-- Spotify-like green color -->
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <!-- Header -->
+            <!-- Header/Search -->
             <RowDefinition Height="*"/>
             <!-- Content -->
             <RowDefinition Height="Auto"/>
             <!-- Player Controls -->
         </Grid.RowDefinitions>
 
-        <!-- Header with Navigation -->
+        <!-- Header with Search -->
         <Grid Grid.Row="0"
-              Background="#FF181818">
+              Background="#FF282828">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Navigation Buttons -->
-            <StackPanel Grid.Column="0"
-                        Orientation="Horizontal"
-                        HorizontalAlignment="Left"
-                        Margin="10">
-                <Button Content="Add Files"
-                        Click="AddFiles_Click"
-                        Margin="0,0,10,0"/>
-                <Button Content="Add Folder"
-                        Click="AddFolder_Click"/>
-            </StackPanel>
+            <Button Content="←"
+                    FontSize="16"
+                    Margin="10,5"
+                    Width="30"
+                    Height="30"/>
 
-            <!-- Search Box -->
             <TextBox Grid.Column="1"
-                     Margin="10"
-                     VerticalAlignment="Center"
-                     Background="#FF282828"
+                     Margin="10,10,20,10"
+                     Background="#FF383838"
                      Foreground="White"
-                     Padding="5"/>
-
-            <!-- View Selection buttons -->
-            <StackPanel Grid.Column="2"
-                        Orientation="Horizontal"
-                        Margin="10">
-                <Button Content="Songs"
-                        Click="ViewSongs_Click"
-                        Margin="5,0"/>
-                <Button Content="Albums"
-                        Click="ViewAlbums_Click"
-                        Margin="5,0"/>
-                <Button Content="Artists"
-                        Click="ViewArtists_Click"
-                        Margin="5,0"/>
-            </StackPanel>
-
-            <!-- Menu -->
-            <Menu Grid.Column="2"
-                  Background="Transparent"
-                  Margin="10">
-                <MenuItem Header="⚙️"
-                          Background="Transparent">
-                    <MenuItem Header="Add Files"
-                              Click="AddFiles_Click"/>
-                    <MenuItem Header="Add Folder"
-                              Click="AddFolder_Click"/>
-                    <Separator/>
-                    <MenuItem x:Name="ShuffleMenuItem"
-                              Header="Shuffle"
-                              IsCheckable="True"
-                              Click="ShuffleMenuItem_Click"/>
-                    <MenuItem x:Name="RepeatMenuItem"
-                              Header="Repeat"
-                              IsCheckable="True"
-                              Click="RepeatMenuItem_Click"/>
-                </MenuItem>
-            </Menu>
+                     Padding="8,5"
+                     BorderThickness="0"
+                     TextChanged="TextBox_TextChanged">
+                <TextBox.Style>
+                    <Style TargetType="TextBox">
+                        <Style.Resources>
+                            <VisualBrush x:Key="SearchHint"
+                                         TileMode="None"
+                                         Opacity="0.5"
+                                         Stretch="None"
+                                         AlignmentX="Left">
+                                <VisualBrush.Visual>
+                                    <TextBlock Text="Search"
+                                               Foreground="#FFB3B3B3"/>
+                                </VisualBrush.Visual>
+                            </VisualBrush>
+                        </Style.Resources>
+                        <Style.Triggers>
+                            <Trigger Property="Text"
+                                     Value="">
+                                <Setter Property="Background"
+                                        Value="{StaticResource SearchHint}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBox.Style>
+            </TextBox>
         </Grid>
 
-        <!-- Add this to your Grid layout, after the navigation buttons -->
+        <!-- Main Content Area -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="250"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Playlist View -->
-            <ListBox x:Name="PlaylistBox"
-                     Grid.Column="0"
-                     SelectionChanged="PlaylistBox_SelectionChanged"
-                     Background="#FF282828"
-                     Margin="10">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Title}"
-                                       Foreground="{Binding IsPlaying}"
-                                       Margin="0,0,5,0"/>
-                            <TextBlock Text="-"
-                                       Foreground="#FFB3B3B3"
-                                       Margin="0,0,5,0"/>
-                            <TextBlock Text="{Binding Artist}"
-                                       Foreground="#FFB3B3B3"/>
-                        </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+            <!-- Navigation Panel -->
+            <Grid Grid.Column="0"
+                  Background="#FF181818">
+                <StackPanel>
+                    <!-- File Management Section -->
+                    <Button Content="Add Files"
+                            Click="AddFiles_Click"
+                            HorizontalContentAlignment="Left"
+                            Padding="20,12"
+                            Margin="0,5"/>
 
-            <!-- Main Content Area -->
+                    <Button Content="Add Folder"
+                            Click="AddFolder_Click"
+                            HorizontalContentAlignment="Left"
+                            Padding="20,12"
+                            Margin="0,5"/>
+
+                    <Separator Margin="10,10"
+                               Background="#FF383838"/>
+
+                    <!-- View Options -->
+                    <Button Content="Songs"
+                            Click="ViewSongs_Click"
+                            HorizontalContentAlignment="Left"
+                            Padding="20,12"
+                            Margin="0,5"/>
+
+                    <Button Content="Artists"
+                            Click="ViewArtists_Click"
+                            HorizontalContentAlignment="Left"
+                            Padding="20,12"
+                            Margin="0,5"/>
+
+                    <Button Content="Albums"
+                            Click="ViewAlbums_Click"
+                            HorizontalContentAlignment="Left"
+                            Padding="20,12"
+                            Margin="0,5"/>
+
+                    <Separator Margin="10,10"
+                               Background="#FF383838"/>
+
+                    <!-- Playlists Section -->
+                    <Button Content="Playlists"
+                            HorizontalContentAlignment="Left"
+                            Padding="20,12"
+                            Margin="0,5"/>
+
+                    <!-- Settings at the bottom -->
+                    <Button Content="Settings"
+                            HorizontalContentAlignment="Left"
+                            Padding="20,12"
+                            Margin="0,5"
+                            VerticalAlignment="Bottom"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Content Area - Keep your existing Views here -->
             <Grid Grid.Column="1"
-                    Margin="10">
+                  Margin="10">
+                <!-- Hidden PlaylistBox for maintaining functionality -->
+                <ListBox x:Name="PlaylistBox"
+                         SelectionChanged="PlaylistBox_SelectionChanged"
+                         Visibility="Collapsed"/>
+
                 <!-- Songs View -->
                 <ListView x:Name="SongListView"
                           Background="Transparent"
                           BorderThickness="0">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="Background"
+                                    Value="Transparent"/>
+                            <Setter Property="Padding"
+                                    Value="10,8"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListViewItem">
+                                        <Border Background="{TemplateBinding Background}"
+                                                Padding="{TemplateBinding Padding}"
+                                                BorderThickness="0">
+                                            <ContentPresenter/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver"
+                                                    Value="True">
+                                                <Setter Property="Background"
+                                                        Value="#FF383838"/>
+                                                <Setter Property="Cursor"
+                                                        Value="Hand"/>
+                                            </Trigger>
+                                            <Trigger Property="ItemsControl.AlternationIndex"
+                                                    Value="0">
+                                                <Setter Property="Background"
+                                                        Value="#FF1E1E1E"/>
+                                            </Trigger>
+                                            <Trigger Property="ItemsControl.AlternationIndex"
+                                                    Value="1">
+                                                <Setter Property="Background"
+                                                        Value="#FF282828"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+
+                    <!-- Add this property to enable alternating rows -->
+                    <ListView.AlternationCount>2</ListView.AlternationCount>
+
+                    <!-- Keep your existing ItemTemplate -->
                     <ListView.ItemTemplate>
                         <DataTemplate>
-                            <Grid MouseLeftButtonUp="SongListItem_Click">
+                            <Grid MouseLeftButtonUp="SongListItem_Click"
+                                  Height="60">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="50"/>
+                                    <ColumnDefinition Width="60"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="120"/>
                                 </Grid.ColumnDefinitions>
                                 <Image Source="{Binding AlbumArt}"
-                                       Width="40"
-                                       Height="40"/>
+                                       Width="50"
+                                       Height="50"/>
                                 <TextBlock Text="{Binding Title}"
                                            Grid.Column="1"
-                                           Foreground="{Binding IsPlaying}"
-                                           VerticalAlignment="Center"/>
+                                           FontSize="15"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground"
+                                                    Value="White"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsPlaying}"
+                                                             Value="True">
+                                                    <Setter Property="Foreground"
+                                                            Value="{StaticResource PlayingHighlightBrush}"/>
+                                                    <Setter Property="FontWeight"
+                                                            Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                                 <TextBlock Text="{Binding Artist}"
                                            Grid.Column="2"
-                                           Foreground="#FFB3B3B3"
+                                           Foreground="White"
+                                           FontSize="14"
                                            VerticalAlignment="Center"/>
                                 <TextBlock Text="{Binding Duration}"
                                            Grid.Column="3"
-                                           Foreground="#FFB3B3B3"
+                                           Foreground="White"
+                                           FontSize="14"
                                            VerticalAlignment="Center"/>
                             </Grid>
                         </DataTemplate>
                     </ListView.ItemTemplate>
+                </ListView>
+
+                <!-- Keep your existing AlbumsView -->
+                <ListView x:Name="AlbumsView"
+                          Visibility="Collapsed"
+                          Background="Transparent"
+                          BorderThickness="0">
+                    <!-- Keep your existing ItemTemplate -->
+                </ListView>
+
+                <!-- Keep your existing ArtistsView -->
+                <ListView x:Name="ArtistsView"
+                          Visibility="Collapsed"
+                          Background="Transparent"
+                          BorderThickness="0">
+                    <!-- Keep your existing ItemTemplate -->
                 </ListView>
 
                 <!-- Song Detail View -->
@@ -367,67 +476,13 @@
                                Margin="0,20,0,0"/>
                     </StackPanel>
                 </Grid>
-
-                <!-- Albums View -->
-                <ListView x:Name="AlbumsView"
-                          Visibility="Collapsed"
-                          Background="Transparent"
-                          BorderThickness="0">
-                    <ListView.ItemTemplate>
-                        <DataTemplate>
-                            <Grid MouseLeftButtonUp="AlbumItem_Click">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="100"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Image Source="{Binding AlbumArt}"
-                                       Width="80"
-                                       Height="80"/>
-                                <StackPanel Grid.Column="1"
-                                            VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Album}"
-                                               Foreground="White"
-                                               FontSize="16"/>
-                                    <TextBlock Text="{Binding Artist}"
-                                               Foreground="#FFB3B3B3"/>
-                                    <TextBlock Text="{Binding SongCount, StringFormat={}{0} songs}"
-                                               Foreground="#FFB3B3B3"/>
-                                </StackPanel>
-                            </Grid>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-
-                <!-- Artists View -->
-                <ListView x:Name="ArtistsView"
-                          Visibility="Collapsed"
-                          Background="Transparent"
-                          BorderThickness="0">
-                    <ListView.ItemTemplate>
-                        <DataTemplate>
-                            <Grid MouseLeftButtonUp="ArtistItem_Click">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding Artist}"
-                                           Foreground="White"
-                                           FontSize="16"/>
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding SongCount, StringFormat={}{0} songs}"
-                                           Foreground="#FFB3B3B3"
-                                           Margin="20,0,0,0"/>
-                            </Grid>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
             </Grid>
         </Grid>
 
         <!-- Playback Controls -->
         <Grid Grid.Row="2"
               Background="#FF181818"
-              Height="90">
+              Height="100">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -438,7 +493,8 @@
                   Margin="10,5">
                 <TextBlock x:Name="CurrentTimeText"
                            Text="00:00"
-                           Foreground="#FFB3B3B3"
+                           Foreground="White"
+                           FontSize="14"
                            HorizontalAlignment="Left"/>
 
                 <Slider x:Name="ProgressSlider"
@@ -467,10 +523,10 @@
 
                 <Button x:Name="PlayButton"
                         Content="▶"
-                        FontSize="20"
-                        Width="40"
-                        Height="40"
-                        Margin="5"
+                        FontSize="24"
+                        Width="45"
+                        Height="45"
+                        Margin="8"
                         Click="PlayButton_Click"/>
 
                 <Button x:Name="NextButton"
@@ -483,14 +539,15 @@
 
                 <!-- Volume Control -->
                 <StackPanel Orientation="Horizontal"
-                            Margin="30,0,0,0"
+                            Margin="40,0,0,0"
                             VerticalAlignment="Center">
                     <TextBlock Text="🔊"
                                Foreground="White"
+                               FontSize="18"
                                VerticalAlignment="Center"
-                               Margin="0,0,5,0"/>
+                               Margin="0,0,8,0"/>
                     <Slider x:Name="VolumeSlider"
-                            Width="100"
+                            Width="120"
                             Maximum="1"
                             Value="0.5"
                             ValueChanged="VolumeSlider_ValueChanged"/>

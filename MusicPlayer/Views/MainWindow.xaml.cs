@@ -218,11 +218,6 @@ namespace MusicPlayer
             }
         }
 
-        private void RepeatMenuItem_Click(object sender, RoutedEventArgs e)
-        {
-            isRepeatEnabled = RepeatMenuItem.IsChecked;
-        }
-
         private void PlayMedia()
         {
             if (PlaylistBox.SelectedItem is SongInfo selectedSong)
@@ -371,15 +366,6 @@ namespace MusicPlayer
                     foreach (var s in originalPlaylist)
                     {
                         s.IsPlaying = false;
-                    }
-
-                    // Restore playing state
-                    selectedSong.IsPlaying = isCurrentlyPlaying;
-
-                    // Show song details if in detail view
-                    if (SongDetailView.Visibility == Visibility.Visible)
-                    {
-                        ShowSongDetails(selectedSong);
                     }
 
                     // Only start playing if no song is currently playing
@@ -567,31 +553,6 @@ namespace MusicPlayer
             SongDetailView.Visibility = Visibility.Collapsed;
         }
 
-        private void ShowMenu_Click(object sender, RoutedEventArgs e)
-        {
-            var contextMenu = new ContextMenu();
-
-            var shuffleMenuItem = new MenuItem { Header = "Shuffle", IsCheckable = true, IsChecked = isShuffleEnabled };
-            shuffleMenuItem.Click += ShuffleMenuItem_Click;
-
-            var repeatMenuItem = new MenuItem { Header = "Repeat", IsCheckable = true, IsChecked = isRepeatEnabled };
-            repeatMenuItem.Click += RepeatMenuItem_Click;
-
-            var savePlaylistMenuItem = new MenuItem { Header = "Save Playlist" };
-            savePlaylistMenuItem.Click += SavePlaylist_Click;
-
-            var loadPlaylistMenuItem = new MenuItem { Header = "Load Playlist" };
-            loadPlaylistMenuItem.Click += LoadPlaylist_Click;
-
-            contextMenu.Items.Add(shuffleMenuItem);
-            contextMenu.Items.Add(repeatMenuItem);
-            contextMenu.Items.Add(new Separator());
-            contextMenu.Items.Add(savePlaylistMenuItem);
-            contextMenu.Items.Add(loadPlaylistMenuItem);
-
-            contextMenu.IsOpen = true;
-        }
-
         private void AlbumItem_Click(object sender, MouseButtonEventArgs e)
         {
             var frameworkElement = sender as FrameworkElement;
@@ -729,6 +690,11 @@ namespace MusicPlayer
                 }
                 UpdateViews();
             }
+        }
+
+        private void TextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+
         }
     }
 }
