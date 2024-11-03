@@ -15,6 +15,7 @@
     <Window.Resources>
         <converters:InverseVisibilityConverter x:Key="InverseVisibilityConverter"/>
         <converters:VisibilityToWidthConverter x:Key="WidthConverter"/>
+        <converters:BoolToBackgroundConverter x:Key="BoolToBackgroundConverter"/>
 
         <Style TargetType="Button">
             <Setter Property="Background"
@@ -331,6 +332,25 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="FadeTransitionStyle"
+               TargetType="FrameworkElement">
+            <Style.Triggers>
+                <Trigger Property="Visibility"
+                         Value="Visible">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                 From="0.0"
+                                                 To="1.0"
+                                                 Duration="0:0:0.3"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -398,8 +418,37 @@
               Grid.RowSpan="2">
             <!-- Background for entire content area -->
             <Image x:Name="MainBackgroundImage"
-                   Stretch="UniformToFill"
-                   Opacity="0.3">
+                   Stretch="UniformToFill">
+                <Image.Style>
+                    <Style TargetType="Image">
+                        <Style.Triggers>
+                            <Trigger Property="Source"
+                                     Value="{x:Null}">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                             To="0"
+                                                             Duration="0:0:0.3"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                            </Trigger>
+                            <Trigger Property="Source"
+                                     Value="{x:Null}">
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                             To="0.3"
+                                                             Duration="0:0:0.3"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Image.Style>
                 <Image.Effect>
                     <BlurEffect Radius="50"/>
                 </Image.Effect>
@@ -417,7 +466,31 @@
                 <!-- Navigation Panel -->
                 <Grid Grid.Column="0"
                       Background="#FF181818"
-                      Visibility="{Binding ElementName=SongDetailView, Path=Visibility, Converter={StaticResource InverseVisibilityConverter}}">
+                      Visibility="{Binding ElementName=SongDetailView, Path=Visibility, Converter={StaticResource InverseVisibilityConverter}}"
+                      Margin="0,5,0,95">
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Style.Triggers>
+                                <Trigger Property="Visibility"
+                                         Value="Visible">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <ThicknessAnimation Storyboard.TargetProperty="Margin"
+                                                                    From="-200,5,0,95"
+                                                                    To="0,5,0,95"
+                                                                    Duration="0:0:0.3">
+                                                    <ThicknessAnimation.EasingFunction>
+                                                        <CubicEase EasingMode="EaseOut"/>
+                                                    </ThicknessAnimation.EasingFunction>
+                                                </ThicknessAnimation>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
                     <StackPanel>
                         <!-- File Management Section -->
                         <Button Content="Add Files"
@@ -481,6 +554,7 @@
 
                     <!-- Songs View -->
                     <ListView x:Name="SongListView"
+                              Style="{StaticResource FadeTransitionStyle}"
                               Background="Transparent"
                               BorderThickness="0">
                         <ListView.ItemContainerStyle>
@@ -567,28 +641,176 @@
 
                     <!-- Albums View -->
                     <ListView x:Name="AlbumsView"
+                              Style="{StaticResource FadeTransitionStyle}"
                               Visibility="Collapsed"
                               Background="Transparent"
                               BorderThickness="0">
-                        <!-- Keep your existing ItemTemplate -->
+                        <ListView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ListView.ItemsPanel>
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Width="200"
+                                      Height="280"
+                                      Margin="10"
+                                      MouseLeftButtonUp="AlbumItem_Click">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="200"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Border Grid.Row="0"
+                                            CornerRadius="8">
+                                        <Image Source="{Binding AlbumArt}"
+                                               Width="200"
+                                               Height="200"
+                                               Stretch="UniformToFill">
+                                            <Image.Effect>
+                                                <DropShadowEffect BlurRadius="10"
+                                                                  ShadowDepth="5"
+                                                                  Opacity="0.3"/>
+                                            </Image.Effect>
+                                        </Image>
+                                    </Border>
+
+                                    <StackPanel Grid.Row="1"
+                                                Margin="0,10,0,0">
+                                        <TextBlock Text="{Binding Title}"
+                                                   Foreground="White"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Artist}"
+                                                   Foreground="#FFB3B3B3"
+                                                   FontSize="14"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding SongCount, StringFormat={}{0} songs}"
+                                                   Foreground="#FFB3B3B3"
+                                                   FontSize="12"
+                                                   Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
                     </ListView>
 
                     <!-- Artists View -->
                     <ListView x:Name="ArtistsView"
+                              Style="{StaticResource FadeTransitionStyle}"
                               Visibility="Collapsed"
                               Background="Transparent"
                               BorderThickness="0">
-                        <!-- Keep your existing ItemTemplate -->
+                        <ListView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ListView.ItemsPanel>
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Width="180"
+                                      Height="240"
+                                      Margin="10"
+                                      MouseLeftButtonUp="ArtistItem_Click">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="180"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Border Grid.Row="0"
+                                            CornerRadius="90">
+                                        <Ellipse Width="180"
+                                                 Height="180">
+                                            <Ellipse.Fill>
+                                                <ImageBrush ImageSource="{Binding ArtistImage}"
+                                                            Stretch="UniformToFill"/>
+                                            </Ellipse.Fill>
+                                            <Ellipse.Effect>
+                                                <DropShadowEffect BlurRadius="10"
+                                                                  ShadowDepth="5"
+                                                                  Opacity="0.3"/>
+                                            </Ellipse.Effect>
+                                        </Ellipse>
+                                    </Border>
+
+                                    <StackPanel Grid.Row="1"
+                                                Margin="0,10,0,0">
+                                        <TextBlock Text="{Binding Name}"
+                                                   Foreground="White"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   TextAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding SongCount, StringFormat={}{0} songs}"
+                                                   Foreground="#FFB3B3B3"
+                                                   FontSize="12"
+                                                   TextAlignment="Center"
+                                                   Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
                     </ListView>
 
                     <!-- Song Detail View -->
                     <Grid x:Name="SongDetailView"
+                          Style="{StaticResource FadeTransitionStyle}"
                           Visibility="Collapsed"
                           Background="#FF121212">
                         <!-- Single background for entire detail view -->
                         <Image x:Name="DetailBackgroundImage"
                                Stretch="UniformToFill"
                                Opacity="0.3">
+                            <Image.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="DetailBackgroundScale"
+                                                    ScaleX="1.1"
+                                                    ScaleY="1.1"/>
+                                    <TranslateTransform x:Name="DetailBackgroundTranslate"
+                                                        X="0"
+                                                        Y="0"/>
+                                </TransformGroup>
+                            </Image.RenderTransform>
+                            <Image.Triggers>
+                                <EventTrigger RoutedEvent="Image.Loaded">
+                                    <BeginStoryboard>
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <!-- Slow zoom animation -->
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="DetailBackgroundScale"
+                                                Storyboard.TargetProperty="ScaleX"
+                                                From="1.1"
+                                                    To="1.2"
+                                                Duration="0:0:30"
+                                                AutoReverse="True"/>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="DetailBackgroundScale"
+                                                Storyboard.TargetProperty="ScaleY"
+                                                From="1.1"
+                                                    To="1.2"
+                                                Duration="0:0:30"
+                                                AutoReverse="True"/>
+
+                                            <!-- Slow pan animation -->
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="DetailBackgroundTranslate"
+                                                Storyboard.TargetProperty="X"
+                                                From="0"
+                                                    To="-50"
+                                                Duration="0:0:40"
+                                                AutoReverse="True"/>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="DetailBackgroundTranslate"
+                                                Storyboard.TargetProperty="Y"
+                                                From="0"
+                                                    To="-30"
+                                                Duration="0:0:35"
+                                                AutoReverse="True"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger>
+                            </Image.Triggers>
                             <Image.Effect>
                                 <BlurEffect Radius="30"/>
                             </Image.Effect>
@@ -719,7 +941,9 @@
                 <!-- Song Info with increased transparency -->
                 <StackPanel Grid.Column="0"
                             Orientation="Horizontal"
-                            Margin="24,0">
+                            Margin="24,0"
+                            MouseLeftButtonUp="NowPlaying_Click"
+                            Cursor="Hand">
                     <Image x:Name="NowPlayingImage"
                            Width="60"
                            Height="60"
@@ -788,6 +1012,14 @@
                                 Orientation="Horizontal"
                                 HorizontalAlignment="Center"
                                 Margin="0,8">
+                        <Button x:Name="ShuffleButton"
+                                Content="🔀"
+                                FontSize="20"
+                                Width="40"
+                                Height="40"
+                                Margin="0,0,12,0"
+                                Click="ShuffleButton_Click"
+                                Background="{Binding IsShuffleEnabled, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToBackgroundConverter}}"/>
                         <Button x:Name="PreviousButton"
                                 Content="⏮"
                                 FontSize="20"
@@ -807,7 +1039,15 @@
                                 FontSize="20"
                                 Width="40"
                                 Height="40"
+                                Margin="0,0,12,0"
                                 Click="NextButton_Click"/>
+                        <Button x:Name="RepeatButton"
+                                Content="🔁"
+                                FontSize="20"
+                                Width="40"
+                                Height="40"
+                                Click="RepeatButton_Click"
+                                Background="{Binding IsRepeatEnabled, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToBackgroundConverter}}"/>
                     </StackPanel>
                 </Grid>
 

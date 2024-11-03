@@ -176,5 +176,67 @@ namespace MusicPlayer.Services
         {
             CleanupExpiredEntries();
         }
+
+        public async Task<List<AlbumInfo>> GetAlbumGroupsAsync(IEnumerable<SongInfo> songs)
+        {
+            var albumGroups = songs
+                .GroupBy(s => new { s.Album, s.Artist })
+                .Select(g =>
+                {
+                    var albumInfo = GetAlbumInfo(g.Key.Album, g.Key.Artist) ?? new AlbumInfo
+                    {
+                        Title = g.Key.Album,
+                        Artist = g.Key.Artist,
+                        LastUpdated = DateTime.Now
+                    };
+
+                    // Update song count
+                    albumInfo.SongCount = g.Count();
+
+                    // Update album art if needed
+                    if (albumInfo.AlbumArt == null)
+                    {
+                        var songWithArt = g.FirstOrDefault(s => s.AlbumArt != null);
+                        if (songWithArt != null)
+                        {
+                            albumInfo.AlbumArt = songWithArt.AlbumArt as BitmapImage;
+                            CacheAlbumInfo(g.Key.Album, g.Key.Artist, albumInfo.AlbumArt);
+                        }
+                    }
+
+                    return albumInfo;
+                })
+                .ToList();
+
+            return albumGroups;
+        }
+
+        public Task<List<ArtistInfo>> GetArtistGroupsAsync(IEnumerable<SongInfo> songs)
+        {
+            var artistGroups = songs
+                .GroupBy(s => s.Artist)
+                .Select(g =>
+                {
+                    var artistInfo = GetArtistInfo(g.Key) ?? new ArtistInfo
+                    {
+                        Name = g.Key,
+                        LastUpdated = DateTime.Now
+                    };
+
+                    // Update song count
+                    artistInfo.SongCount = g.Count();
+
+                    // If no cached artist image, set default image temporarily
+                    if (artistInfo.ArtistImage == null)
+                    {
+                        artistInfo.SetDefaultImage();
+                    }
+
+                    return artistInfo;
+                })
+                .ToList();
+
+            return Task.FromResult(artistGroups);
+        }
     }
 }

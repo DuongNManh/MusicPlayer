@@ -18,7 +18,12 @@
 
 	<ItemGroup>
 		<Folder Include="Assets\" />
+		<Folder Include="Resources\" />
 
+	</ItemGroup>
+
+	<ItemGroup>
+		<Resource Include="Resources\default_artist.png" />
 	</ItemGroup>
 
 </Project>

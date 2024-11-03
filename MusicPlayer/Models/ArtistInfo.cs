@@ -9,6 +9,7 @@ namespace MusicPlayer.Models
         private string name;
         private BitmapImage artistImage;
         private DateTime lastUpdated;
+        private int songCount;
 
         public string Name
         {
@@ -46,10 +47,40 @@ namespace MusicPlayer.Models
             }
         }
 
+        public int SongCount
+        {
+            get => songCount;
+            set
+            {
+                if (songCount != value)
+                {
+                    songCount = value;
+                    OnPropertyChanged(nameof(SongCount));
+                }
+            }
+        }
+
         public event PropertyChangedEventHandler PropertyChanged;
         protected virtual void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        public void SetDefaultImage()
+        {
+            try
+            {
+                var defaultImage = new BitmapImage();
+                defaultImage.BeginInit();
+                defaultImage.UriSource = new Uri("pack://application:,,,/MusicPlayer;component/Resources/default_artist.png", UriKind.Absolute);
+                defaultImage.EndInit();
+                defaultImage.Freeze();
+                ArtistImage = defaultImage;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error setting default image: {ex.Message}");
+            }
         }
     }
 }

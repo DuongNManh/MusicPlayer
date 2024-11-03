@@ -285,8 +285,11 @@ namespace MusicPlayer.Views
             if (!isDraggingSlider && mediaPlayer.NaturalDuration.HasTimeSpan)
             {
                 ProgressSlider.Value = mediaPlayer.Position.TotalSeconds;
-                CurrentTimeText.Text = mediaPlayer.Position.ToString(@"mm\:ss");
-                TotalTimeText.Text = mediaPlayer.NaturalDuration.TimeSpan.ToString(@"mm\:ss");
+                TimeSpan currentPosition = TimeSpan.FromSeconds(Math.Ceiling(mediaPlayer.Position.TotalSeconds));
+                TimeSpan totalDuration = TimeSpan.FromSeconds(Math.Ceiling(mediaPlayer.NaturalDuration.TimeSpan.TotalSeconds));
+
+                CurrentTimeText.Text = currentPosition.ToString(@"mm\:ss");
+                TotalTimeText.Text = totalDuration.ToString(@"mm\:ss");
 
                 // Keep visualization in sync with audio position
                 if (_audioFileReader != null)
@@ -304,8 +307,10 @@ namespace MusicPlayer.Views
         {
             if (mediaPlayer.NaturalDuration.HasTimeSpan)
             {
-                ProgressSlider.Maximum = mediaPlayer.NaturalDuration.TimeSpan.TotalSeconds;
-                TotalTimeText.Text = mediaPlayer.NaturalDuration.TimeSpan.ToString(@"mm\:ss");
+                double totalSeconds = Math.Ceiling(mediaPlayer.NaturalDuration.TimeSpan.TotalSeconds);
+                ProgressSlider.Maximum = totalSeconds;
+                TimeSpan duration = TimeSpan.FromSeconds(totalSeconds);
+                TotalTimeText.Text = duration.ToString(@"mm\:ss");
             }
         }
 
@@ -318,22 +323,39 @@ namespace MusicPlayer.Views
 
             if (isRepeatEnabled)
             {
+                // If repeat is enabled, just replay the current song
                 mediaPlayer.Position = TimeSpan.Zero;
                 mediaPlayer.Play();
-                return;
-            }
-
-            if (PlaylistBox.SelectedIndex < PlaylistBox.Items.Count - 1)
-            {
-                PlaylistBox.SelectedIndex++;
             }
             else if (isShuffleEnabled)
             {
-                ShufflePlaylist();
-                PlaylistBox.SelectedIndex = 0;
+                // If shuffle is enabled, play a random song
+                var currentIndex = PlaylistBox.SelectedIndex;
+                var remainingIndices = Enumerable.Range(0, PlaylistBox.Items.Count)
+                    .Where(i => i != currentIndex)
+                    .ToList();
+
+                if (remainingIndices.Any())
+                {
+                    var randomIndex = remainingIndices[random.Next(remainingIndices.Count)];
+                    PlaylistBox.SelectedIndex = randomIndex;
+                }
+                else
+                {
+                    // If no more songs, stop playback
+                    mediaPlayer.Stop();
+                    PlayButton.Content = "▶";
+                    timer.Stop();
+                }
+            }
+            else if (PlaylistBox.SelectedIndex < PlaylistBox.Items.Count - 1)
+            {
+                // Normal sequential playback
+                PlaylistBox.SelectedIndex++;
             }
             else
             {
+                // End of playlist reached
                 mediaPlayer.Stop();
                 PlayButton.Content = "▶";
                 timer.Stop();
@@ -396,16 +418,52 @@ namespace MusicPlayer.Views
 
         private void PreviousButton_Click(object sender, RoutedEventArgs e)
         {
-            if (PlaylistBox.SelectedIndex > 0)
+            if (isRepeatEnabled)
             {
+                // If repeat is enabled, restart the current song
+                mediaPlayer.Position = TimeSpan.Zero;
+            }
+            else if (isShuffleEnabled)
+            {
+                // If shuffle is enabled, play a random previous song
+                var currentIndex = PlaylistBox.SelectedIndex;
+                var previousIndices = Enumerable.Range(0, currentIndex).ToList();
+
+                if (previousIndices.Any())
+                {
+                    var randomIndex = previousIndices[random.Next(previousIndices.Count)];
+                    PlaylistBox.SelectedIndex = randomIndex;
+                }
+            }
+            else if (PlaylistBox.SelectedIndex > 0)
+            {
+                // Normal sequential navigation
                 PlaylistBox.SelectedIndex--;
             }
         }
 
         private void NextButton_Click(object sender, RoutedEventArgs e)
         {
-            if (PlaylistBox.SelectedIndex < PlaylistBox.Items.Count - 1)
+            if (isRepeatEnabled)
             {
+                // If repeat is enabled, restart the current song
+                mediaPlayer.Position = TimeSpan.Zero;
+            }
+            else if (isShuffleEnabled)
+            {
+                // If shuffle is enabled, play a random next song
+                var currentIndex = PlaylistBox.SelectedIndex;
+                var nextIndices = Enumerable.Range(currentIndex + 1, PlaylistBox.Items.Count - currentIndex - 1).ToList();
+
+                if (nextIndices.Any())
+                {
+                    var randomIndex = nextIndices[random.Next(nextIndices.Count)];
+                    PlaylistBox.SelectedIndex = randomIndex;
+                }
+            }
+            else if (PlaylistBox.SelectedIndex < PlaylistBox.Items.Count - 1)
+            {
+                // Normal sequential navigation
                 PlaylistBox.SelectedIndex++;
             }
         }
@@ -534,6 +592,7 @@ namespace MusicPlayer.Views
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine($"Loading image for artist: {artist}");
                 // Clear previous artist image first
                 DetailArtistImage.Source = null;
 
@@ -542,6 +601,11 @@ namespace MusicPlayer.Views
                 if (artistImage != null)
                 {
                     DetailArtistImage.Source = artistImage;
+                    System.Diagnostics.Debug.WriteLine("Artist image loaded successfully");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("No artist image found");
                 }
             }
             catch (Exception ex)
@@ -566,62 +630,90 @@ namespace MusicPlayer.Views
             AlbumsView.Visibility = Visibility.Collapsed;
             ArtistsView.Visibility = Visibility.Collapsed;
             SongDetailView.Visibility = Visibility.Collapsed;
+
+            // Always show all songs in Songs view
+            SongListView.ItemsSource = originalPlaylist;
         }
 
-        private void ViewAlbums_Click(object sender, RoutedEventArgs e)
+        private async void ViewAlbums_Click(object sender, RoutedEventArgs e)
         {
             SongListView.Visibility = Visibility.Collapsed;
             AlbumsView.Visibility = Visibility.Visible;
             ArtistsView.Visibility = Visibility.Collapsed;
             SongDetailView.Visibility = Visibility.Collapsed;
+
+            var albums = await _cacheService.GetAlbumGroupsAsync(PlaylistBox.Items.Cast<SongInfo>());
+            AlbumsView.ItemsSource = albums;
         }
 
-        private void ViewArtists_Click(object sender, RoutedEventArgs e)
+        private async void ViewArtists_Click(object sender, RoutedEventArgs e)
         {
-            SongListView.Visibility = Visibility.Collapsed;
-            AlbumsView.Visibility = Visibility.Collapsed;
-            ArtistsView.Visibility = Visibility.Visible;
-            SongDetailView.Visibility = Visibility.Collapsed;
-        }
-
-        private void AlbumItem_Click(object sender, MouseButtonEventArgs e)
-        {
-            var frameworkElement = sender as FrameworkElement;
-            if (frameworkElement?.DataContext is { } albumGroup)
+            try
             {
-                var album = albumGroup.GetType().GetProperty("Album").GetValue(albumGroup).ToString();
-                var artist = albumGroup.GetType().GetProperty("Artist").GetValue(albumGroup).ToString();
+                SongListView.Visibility = Visibility.Collapsed;
+                AlbumsView.Visibility = Visibility.Collapsed;
+                ArtistsView.Visibility = Visibility.Visible;
+                SongDetailView.Visibility = Visibility.Collapsed;
 
-                // Filter songs for this album
-                var albumSongs = originalPlaylist
-                    .Where(s => s.Album == album && s.Artist == artist)
-                    .ToList();
+                var artists = await _cacheService.GetArtistGroupsAsync(PlaylistBox.Items.Cast<SongInfo>());
+                ArtistsView.ItemsSource = artists;
 
-                // Update Songs view with filtered songs
-                SongListView.ItemsSource = albumSongs;
+                // Fetch artist images asynchronously
+                foreach (var artist in artists)
+                {
+                    try
+                    {
+                        // Check if we need to fetch a new image
+                        bool needsNewImage = artist.ArtistImage == null;
+                        if (artist.ArtistImage?.UriSource != null)
+                        {
+                            string imageSource = artist.ArtistImage.UriSource.ToString();
+                            needsNewImage = imageSource.Contains("default_artist");
+                        }
 
-                // Switch to Songs view
-                ViewSongs_Click(null, null);
+                        if (needsNewImage)
+                        {
+                            var artistImage = await _musicMetadataService.GetArtistImageAsync(artist.Name);
+                            if (artistImage != null)
+                            {
+                                artist.ArtistImage = artistImage;
+                            }
+                            else
+                            {
+                                // If we couldn't get an image from the API, ensure we have at least the default
+                                artist.SetDefaultImage();
+                            }
+                        }
+                    }
+                    catch (Exception artistEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error loading image for artist {artist.Name}: {artistEx.Message}");
+                        // Set default image if there's an error
+                        artist.SetDefaultImage();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in ViewArtists_Click: {ex.Message}");
             }
         }
 
         private void ArtistItem_Click(object sender, MouseButtonEventArgs e)
         {
             var frameworkElement = sender as FrameworkElement;
-            if (frameworkElement?.DataContext is { } artistGroup)
+            if (frameworkElement?.DataContext is ArtistInfo artistInfo)
             {
-                var artist = artistGroup.GetType().GetProperty("Artist").GetValue(artistGroup).ToString();
+                ViewArtistSongs(artistInfo);
+            }
+        }
 
-                // Filter songs for this artist
-                var artistSongs = originalPlaylist
-                    .Where(s => s.Artist == artist)
-                    .ToList();
-
-                // Update Songs view with filtered songs
-                SongListView.ItemsSource = artistSongs;
-
-                // Switch to Songs view
-                ViewSongs_Click(null, null);
+        private void AlbumItem_Click(object sender, MouseButtonEventArgs e)
+        {
+            var frameworkElement = sender as FrameworkElement;
+            if (frameworkElement?.DataContext is AlbumInfo albumInfo)
+            {
+                ViewAlbumSongs(albumInfo);
             }
         }
 
@@ -633,28 +725,29 @@ namespace MusicPlayer.Views
                 SongListView.ItemsSource = null;
                 SongListView.ItemsSource = originalPlaylist;
 
-                // Update Albums View
+                // Update Albums View with proper song count
                 var albumGroups = originalPlaylist
                     .GroupBy(s => new { s.Album, s.Artist })
-                    .Select(g => new
+                    .Select(g => new AlbumInfo
                     {
-                        Album = g.Key.Album,
+                        Title = g.Key.Album,
                         Artist = g.Key.Artist,
-                        Songs = g.ToList(),
-                        AlbumArt = g.First().AlbumArt,
-                        SongCount = g.Count()
+                        AlbumArt = g.First().AlbumArt as BitmapImage,
+                        SongCount = g.Count(),
+                        LastUpdated = DateTime.Now
                     })
                     .ToList();
                 AlbumsView.ItemsSource = albumGroups;
 
-                // Update Artists View
+                // Update Artists View with proper song count
                 var artistGroups = originalPlaylist
                     .GroupBy(s => s.Artist)
-                    .Select(g => new
+                    .Select(g => new ArtistInfo
                     {
-                        Artist = g.Key,
-                        Songs = g.ToList(),
-                        SongCount = g.Count()
+                        Name = g.Key,
+                        ArtistImage = g.First().AlbumArt as BitmapImage,
+                        SongCount = g.Count(),
+                        LastUpdated = DateTime.Now
                     })
                     .ToList();
                 ArtistsView.ItemsSource = artistGroups;
@@ -726,6 +819,175 @@ namespace MusicPlayer.Views
         private void TextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
 
+        }
+
+        private void ViewArtistSongs(ArtistInfo artistInfo)
+        {
+            if (artistInfo == null) return;
+
+            // Filter songs by artist
+            var artistSongs = originalPlaylist
+                .Where(s => s.Artist == artistInfo.Name)
+                .ToList();
+
+            // Update Songs view with filtered songs
+            SongListView.ItemsSource = artistSongs;
+
+            // Switch to Songs view
+            SongListView.Visibility = Visibility.Visible;
+            AlbumsView.Visibility = Visibility.Collapsed;
+            ArtistsView.Visibility = Visibility.Collapsed;
+            SongDetailView.Visibility = Visibility.Collapsed;
+        }
+
+        private void ViewAlbumSongs(AlbumInfo albumInfo)
+        {
+            if (albumInfo == null) return;
+
+            // Filter songs for this album
+            var albumSongs = originalPlaylist
+                .Where(s => s.Album == albumInfo.Title && s.Artist == albumInfo.Artist)
+                .ToList();
+
+            // Update Songs view with filtered songs
+            SongListView.ItemsSource = albumSongs;
+
+            // Switch to Songs view
+            SongListView.Visibility = Visibility.Visible;
+            AlbumsView.Visibility = Visibility.Collapsed;
+            ArtistsView.Visibility = Visibility.Collapsed;
+            SongDetailView.Visibility = Visibility.Collapsed;
+        }
+
+        private void ViewPlaylist_Click(object sender, RoutedEventArgs e)
+        {
+            SongListView.Visibility = Visibility.Visible;
+            AlbumsView.Visibility = Visibility.Collapsed;
+            ArtistsView.Visibility = Visibility.Collapsed;
+            SongDetailView.Visibility = Visibility.Collapsed;
+
+            // Show upcoming songs in order
+            var upcomingPlaylist = GetUpcomingPlaylist();
+            SongListView.ItemsSource = upcomingPlaylist;
+        }
+
+        private List<SongInfo> GetUpcomingPlaylist()
+        {
+            var playlist = new List<SongInfo>();
+            var currentIndex = PlaylistBox.SelectedIndex;
+
+            if (currentIndex == -1) return playlist;
+
+            // If shuffle is enabled, generate shuffled playlist
+            if (isShuffleEnabled)
+            {
+                var remainingSongs = new List<SongInfo>();
+                for (int i = 0; i < PlaylistBox.Items.Count; i++)
+                {
+                    if (i != currentIndex)
+                    {
+                        remainingSongs.Add(PlaylistBox.Items[i] as SongInfo);
+                    }
+                }
+
+                // Shuffle the remaining songs
+                var rng = new Random();
+                var shuffledSongs = remainingSongs.OrderBy(x => rng.Next()).ToList();
+
+                // Add current song at the beginning
+                playlist.Add(PlaylistBox.Items[currentIndex] as SongInfo);
+                playlist.AddRange(shuffledSongs);
+            }
+            else
+            {
+                // Add songs in order starting from current
+                for (int i = currentIndex; i < PlaylistBox.Items.Count; i++)
+                {
+                    playlist.Add(PlaylistBox.Items[i] as SongInfo);
+                }
+
+                // If repeat is enabled, add songs from beginning
+                if (isRepeatEnabled && currentIndex > 0)
+                {
+                    for (int i = 0; i < currentIndex; i++)
+                    {
+                        playlist.Add(PlaylistBox.Items[i] as SongInfo);
+                    }
+                }
+            }
+
+            return playlist;
+        }
+
+        private void ShuffleButton_Click(object sender, RoutedEventArgs e)
+        {
+            // If repeat is enabled, disable it first
+            if (isRepeatEnabled)
+            {
+                isRepeatEnabled = false;
+                UpdateRepeatButtonStyle();
+            }
+
+            isShuffleEnabled = !isShuffleEnabled;
+            UpdateShuffleButtonStyle();
+
+            // If shuffle is enabled, shuffle the playlist
+            if (isShuffleEnabled)
+            {
+                ShufflePlaylist();
+            }
+            else
+            {
+                RestoreOriginalPlaylist();
+            }
+
+            // If we're in playlist view, refresh it
+            if (SongListView.IsVisible && SongListView.ItemsSource != originalPlaylist)
+            {
+                ViewPlaylist_Click(sender, e);
+            }
+        }
+
+        private void RepeatButton_Click(object sender, RoutedEventArgs e)
+        {
+            // If shuffle is enabled, disable it first
+            if (isShuffleEnabled)
+            {
+                isShuffleEnabled = false;
+                UpdateShuffleButtonStyle();
+                RestoreOriginalPlaylist();
+            }
+
+            isRepeatEnabled = !isRepeatEnabled;
+            UpdateRepeatButtonStyle();
+
+            // If we're in playlist view, refresh it
+            if (SongListView.IsVisible && SongListView.ItemsSource != originalPlaylist)
+            {
+                ViewPlaylist_Click(sender, e);
+            }
+        }
+
+        private void UpdateShuffleButtonStyle()
+        {
+            ShuffleButton.Background = isShuffleEnabled ?
+                new SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 215, 96)) :
+                new SolidColorBrush(Colors.Transparent);
+        }
+
+        private void UpdateRepeatButtonStyle()
+        {
+            RepeatButton.Background = isRepeatEnabled ?
+                new SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 215, 96)) :
+                new SolidColorBrush(Colors.Transparent);
+        }
+
+        private void NowPlaying_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (PlaylistBox.SelectedItem is SongInfo currentSong)
+            {
+                ShowSongDetails(currentSong);
+            }
         }
     }
 }

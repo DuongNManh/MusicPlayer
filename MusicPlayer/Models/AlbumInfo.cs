@@ -10,6 +10,7 @@ namespace MusicPlayer.Models
         private string artist;
         private BitmapImage albumArt;
         private DateTime lastUpdated;
+        private int songCount;
 
         public string Title
         {
@@ -57,6 +58,19 @@ namespace MusicPlayer.Models
             {
                 lastUpdated = value;
                 OnPropertyChanged(nameof(LastUpdated));
+            }
+        }
+
+        public int SongCount
+        {
+            get => songCount;
+            set
+            {
+                if (songCount != value)
+                {
+                    songCount = value;
+                    OnPropertyChanged(nameof(SongCount));
+                }
             }
         }
 

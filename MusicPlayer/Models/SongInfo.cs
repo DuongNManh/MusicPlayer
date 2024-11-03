@@ -69,7 +69,8 @@ namespace MusicPlayer.Models
                             "Unknown Artist" : flacTag.FirstPerformer;
                         Album = string.IsNullOrEmpty(flacTag.Album) ?
                             "Unknown Album" : flacTag.Album;
-                        Duration = flacFile.Properties.Duration;
+                        // Round up to nearest second
+                        Duration = TimeSpan.FromSeconds(Math.Ceiling(flacFile.Properties.Duration.TotalSeconds));
                     }
                     else
                     {
@@ -80,7 +81,8 @@ namespace MusicPlayer.Models
                             "Unknown Artist" : file.Tag.FirstPerformer;
                         Album = string.IsNullOrEmpty(file.Tag.Album) ?
                             "Unknown Album" : file.Tag.Album;
-                        Duration = file.Properties.Duration;
+                        // Round up to nearest second
+                        Duration = TimeSpan.FromSeconds(Math.Ceiling(file.Properties.Duration.TotalSeconds));
                     }
                 }
             }
@@ -128,5 +130,8 @@ namespace MusicPlayer.Models
         {
             return $"{Title} - {Artist}";
         }
+
+        // Add this method to format the duration string
+        public string DurationString => Duration.ToString(@"mm\:ss");
     }
 }
