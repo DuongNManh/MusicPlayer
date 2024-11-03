@@ -12,10 +12,13 @@
 	<ItemGroup>
 		<PackageReference Include="TagLibSharp" Version="2.3.0" />
 		<PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+		<PackageReference Include="NAudio" Version="2.2.1" />
+		<PackageReference Include="NAudio.WinForms" Version="2.2.1" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Assets\" />
+		<Folder Include="Assets\" />
+
 	</ItemGroup>
 
 </Project>

@@ -15,8 +15,9 @@ using MusicPlayer.Services;
 using MusicPlayer.Models;
 using System.Windows.Input;
 using System.Windows.Forms;
+using NAudio.Wave;
 
-namespace MusicPlayer
+namespace MusicPlayer.Views
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
@@ -30,10 +31,13 @@ namespace MusicPlayer
         private List<SongInfo> originalPlaylist = new List<SongInfo>();
         private bool isShuffleEnabled = false;
         private bool isRepeatEnabled = false;
-        private readonly int visualizationBars = 50;
-        private System.Windows.Shapes.Rectangle[] visualizationRectangles;
         private readonly MusicMetadataService _musicMetadataService;
         private readonly MetadataCacheService _cacheService;
+        private AudioVisualizationService _visualizationService;
+        private WaveOutEvent _waveOutDevice;
+        private AudioFileReader _audioFileReader;
+        private DispatcherTimer visualizationTimer;
+        private WaveOut silentOutput;
 
         public MainWindow()
         {
@@ -41,6 +45,7 @@ namespace MusicPlayer
             _cacheService = new MetadataCacheService();
             _musicMetadataService = new MusicMetadataService(_cacheService);
             InitializePlayer();
+            InitializeVisualization();
             LoadCachedData();
 
             // Add cleanup when window closes
@@ -61,6 +66,13 @@ namespace MusicPlayer
             this.Loaded += (s, e) => mediaPlayer.Volume = VolumeSlider.Value;
         }
 
+        private void InitializeVisualization()
+        {
+            // Initialize visualization with 256 bars
+            _visualizationService = new AudioVisualizationService(VisualizationCanvas, 256);
+            _waveOutDevice = new WaveOutEvent();
+        }
+
         private void LoadCachedData()
         {
             try
@@ -79,43 +91,6 @@ namespace MusicPlayer
             }
         }
 
-        private void OpenFile_Click(object sender, RoutedEventArgs e)
-        {
-            var openFileDialog = new Microsoft.Win32.OpenFileDialog
-            {
-                Multiselect = true,
-                Filter = "Audio Files|*.mp3;*.m4a;*.wav|All Files|*.*"
-            };
-
-            if (openFileDialog.ShowDialog() == true)
-            {
-                foreach (string filename in openFileDialog.FileNames)
-                {
-                    AddSongToPlaylist(filename);
-                }
-                UpdateViews();
-            }
-        }
-
-        private void OpenFolder_Click(object sender, RoutedEventArgs e)
-        {
-            var folderDialog = new System.Windows.Forms.FolderBrowserDialog();
-            if (folderDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-            {
-                string[] files = Directory.GetFiles(folderDialog.SelectedPath, "*.*", SearchOption.AllDirectories)
-                    .Where(file => file.ToLower().EndsWith(".mp3") ||
-                                  file.ToLower().EndsWith(".m4a") ||
-                                  file.ToLower().EndsWith(".wav"))
-                    .ToArray();
-
-                foreach (string file in files)
-                {
-                    AddSongToPlaylist(file);
-                }
-                UpdateViews();
-            }
-        }
-
         private void SavePlaylist_Click(object sender, RoutedEventArgs e)
         {
             var saveFileDialog = new Microsoft.Win32.SaveFileDialog
@@ -129,51 +104,6 @@ namespace MusicPlayer
                 var playlist = originalPlaylist.Select(s => s.FilePath).ToList();
                 string jsonString = JsonSerializer.Serialize(playlist);
                 File.WriteAllText(saveFileDialog.FileName, jsonString);
-            }
-        }
-
-        private void LoadPlaylist_Click(object sender, RoutedEventArgs e)
-        {
-            var openFileDialog = new Microsoft.Win32.OpenFileDialog
-            {
-                Filter = "Playlist files (*.json)|*.json"
-            };
-
-            if (openFileDialog.ShowDialog() == true)
-            {
-                string jsonString = File.ReadAllText(openFileDialog.FileName);
-                var playlist = JsonSerializer.Deserialize<List<string>>(jsonString);
-
-                PlaylistBox.Items.Clear();
-                originalPlaylist.Clear();
-
-                foreach (string file in playlist)
-                {
-                    if (File.Exists(file))
-                    {
-                        AddSongToPlaylist(file);
-                    }
-                }
-
-                if (PlaylistBox.Items.Count > 0)
-                {
-                    PlaylistBox.SelectedIndex = 0;
-                    PlayMedia();
-                }
-            }
-        }
-
-        private void ShuffleMenuItem_Click(object sender, RoutedEventArgs e)
-        {
-            var menuItem = sender as MenuItem;
-            isShuffleEnabled = menuItem.IsChecked;
-            if (isShuffleEnabled)
-            {
-                ShufflePlaylist();
-            }
-            else
-            {
-                RestoreOriginalPlaylist();
             }
         }
 
@@ -233,8 +163,31 @@ namespace MusicPlayer
                     // Set new playing song
                     selectedSong.IsPlaying = true;
 
+                    // Stop and cleanup previous audio resources
+                    StopAndCleanupAudio();
+
+                    // Setup MediaPlayer for audio playback
                     mediaPlayer.Open(new Uri(selectedSong.FilePath));
                     mediaPlayer.Play();
+
+                    // Setup visualization capture
+                    _audioFileReader = new AudioFileReader(selectedSong.FilePath);
+                    var waveProvider = new WaveFloatTo16Provider(_audioFileReader);
+                    var captureProvider = new WasapiLoopbackCapture();
+
+                    captureProvider.DataAvailable += (s, e) =>
+                    {
+                        if (e.Buffer.Length > 0)
+                        {
+                            var buffer = new float[e.Buffer.Length / 4];
+                            Buffer.BlockCopy(e.Buffer, 0, buffer, 0, e.Buffer.Length);
+                            _visualizationService.UpdateSpectrum(buffer);
+                        }
+                    };
+
+                    captureProvider.StartRecording();
+
+                    // Update UI
                     PlayButton.Content = "⏸";
                     timer.Start();
                     UpdateNowPlaying(selectedSong);
@@ -247,6 +200,25 @@ namespace MusicPlayer
                 {
                     System.Windows.MessageBox.Show($"Error playing media: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
+            }
+        }
+
+        private void StopAndCleanupAudio()
+        {
+            try
+            {
+                silentOutput?.Stop();
+                silentOutput?.Dispose();
+                silentOutput = null;
+
+                _audioFileReader?.Dispose();
+                _audioFileReader = null;
+
+                visualizationTimer?.Stop();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error during audio cleanup: {ex.Message}");
             }
         }
 
@@ -274,12 +246,16 @@ namespace MusicPlayer
                     {
                         await selectedSong.LoadAlbumArtAsync();
                     }
+
+                    // Update now playing bar
+                    NowPlayingTitle.Text = song.Title;
+                    NowPlayingArtist.Text = song.Artist;
+                    NowPlayingImage.Source = song.AlbumArt;
+                    PlayButton.Content = "⏸";
                 }
 
                 // Refresh both views
                 PlaylistBox.Items.Refresh();
-
-                // Update ListView with a new collection
                 SongListView.ItemsSource = new List<SongInfo>(originalPlaylist);
             }
             catch (Exception ex)
@@ -310,6 +286,17 @@ namespace MusicPlayer
             {
                 ProgressSlider.Value = mediaPlayer.Position.TotalSeconds;
                 CurrentTimeText.Text = mediaPlayer.Position.ToString(@"mm\:ss");
+                TotalTimeText.Text = mediaPlayer.NaturalDuration.TimeSpan.ToString(@"mm\:ss");
+
+                // Keep visualization in sync with audio position
+                if (_audioFileReader != null)
+                {
+                    var targetPosition = (long)(mediaPlayer.Position.TotalSeconds * _audioFileReader.WaveFormat.AverageBytesPerSecond);
+                    if (Math.Abs(_audioFileReader.Position - targetPosition) > _audioFileReader.WaveFormat.AverageBytesPerSecond)
+                    {
+                        _audioFileReader.Position = targetPosition;
+                    }
+                }
             }
         }
 
@@ -398,7 +385,13 @@ namespace MusicPlayer
         private void ProgressSlider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         {
             isDraggingSlider = false;
-            mediaPlayer.Position = TimeSpan.FromSeconds(ProgressSlider.Value);
+            var position = TimeSpan.FromSeconds(ProgressSlider.Value);
+            mediaPlayer.Position = position;
+
+            if (_audioFileReader != null)
+            {
+                _audioFileReader.Position = (long)(position.TotalSeconds * _audioFileReader.WaveFormat.AverageBytesPerSecond);
+            }
         }
 
         private void PreviousButton_Click(object sender, RoutedEventArgs e)
@@ -431,14 +424,26 @@ namespace MusicPlayer
                 string jsonData = _cacheService.SaveToJson();
                 File.WriteAllText(cacheFile, jsonData);
 
-                // Existing cleanup code
+                // Stop playback first
                 mediaPlayer.Stop();
-                timer.Stop();
+                timer?.Stop();
+
+                // Cleanup visualization resources
+                if (_visualizationService != null)
+                {
+                    _visualizationService.Dispose();
+                    _visualizationService = null;
+                }
+
+                // Cleanup audio resources in order
+                StopAndCleanupAudio();
+
+                // Final cleanup
                 mediaPlayer.Close();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error saving cache: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error during cleanup: {ex.Message}");
             }
         }
 
@@ -447,10 +452,41 @@ namespace MusicPlayer
             var frameworkElement = sender as FrameworkElement;
             if (frameworkElement?.DataContext is SongInfo song)
             {
-                // Update both old and new UI
-                PlaylistBox.SelectedItem = song;
-                ShowSongDetails(song);
-                PlayMedia();
+                // If the song is already playing, just show details
+                if (song.IsPlaying)
+                {
+                    ShowSongDetails(song);
+                }
+                // Otherwise, select it in playlist and play it
+                else
+                {
+                    PlaylistBox.SelectedItem = song;
+                    ShowSongDetails(song);
+                    PlayMedia();
+                }
+            }
+        }
+
+        private void ClearSongDetails()
+        {
+            try
+            {
+                // Clear background and album art
+                DetailBackgroundImage.Source = null;
+                DetailAlbumArtImage.Source = null;
+                DetailArtistImage.Source = null;
+
+                // Clear text content
+                DetailTitleText.Text = string.Empty;
+                DetailArtistText.Text = string.Empty;
+                DetailAlbumText.Text = string.Empty;
+
+                // Clear MainBackgroundImage if it exists
+                MainBackgroundImage.Source = null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error clearing song details: {ex.Message}");
             }
         }
 
@@ -460,33 +496,23 @@ namespace MusicPlayer
 
             try
             {
-                // Clear previous images first
-                DetailAlbumArtImage.Source = null;
-                DetailArtistImage.Source = null;
+                // Clear previous song details first
+                ClearSongDetails();
 
-                // Update detail view content
+                // Update background and album art
+                if (song.AlbumArt != null)
+                {
+                    DetailBackgroundImage.Source = song.AlbumArt;
+                    DetailAlbumArtImage.Source = song.AlbumArt;
+                    MainBackgroundImage.Source = song.AlbumArt;
+                }
+
+                // Update text content
                 DetailTitleText.Text = song.Title;
                 DetailArtistText.Text = song.Artist;
                 DetailAlbumText.Text = song.Album;
 
-                // Load album art
-                if (song.AlbumArt != null)
-                {
-                    DetailAlbumArtImage.Source = song.AlbumArt;
-                }
-                else
-                {
-                    // Load album art if not already loaded
-                    _ = song.LoadAlbumArtAsync().ContinueWith(t =>
-                    {
-                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            DetailAlbumArtImage.Source = song.AlbumArt;
-                        });
-                    });
-                }
-
-                // Load artist image
+                // Load artist image if available
                 if (!string.IsNullOrEmpty(song.Artist) && song.Artist != "Unknown Artist")
                 {
                     LoadArtistImage(song.Artist);
@@ -494,6 +520,8 @@ namespace MusicPlayer
 
                 // Switch views
                 SongListView.Visibility = Visibility.Collapsed;
+                AlbumsView.Visibility = Visibility.Collapsed;
+                ArtistsView.Visibility = Visibility.Collapsed;
                 SongDetailView.Visibility = Visibility.Visible;
             }
             catch (Exception ex)
@@ -524,6 +552,9 @@ namespace MusicPlayer
 
         private void BackToLibrary_Click(object sender, RoutedEventArgs e)
         {
+            // Clear song details when going back to library
+            ClearSongDetails();
+
             // Switch back to library view
             SongDetailView.Visibility = Visibility.Collapsed;
             SongListView.Visibility = Visibility.Visible;
