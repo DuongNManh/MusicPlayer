@@ -79,5 +79,23 @@ namespace MusicPlayer.Models
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+
+        public void SetDefaultAlbumArt()
+        {
+            try
+            {
+                var defaultImage = new BitmapImage();
+                defaultImage.BeginInit();
+                defaultImage.UriSource = new Uri("pack://application:,,,/MusicPlayer;component/Resources/default_album.png", UriKind.Absolute);
+                defaultImage.EndInit();
+                defaultImage.Freeze();
+                AlbumArt = defaultImage;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error setting default album art: {ex.Message}");
+                AlbumArt = null;
+            }
+        }
     }
 }

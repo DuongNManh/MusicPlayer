@@ -96,6 +96,24 @@ namespace MusicPlayer.Models
             }
         }
 
+        public void SetDefaultAlbumArt()
+        {
+            try
+            {
+                var defaultImage = new BitmapImage();
+                defaultImage.BeginInit();
+                defaultImage.UriSource = new Uri("pack://application:,,,/MusicPlayer;component/Resources/default_song.png", UriKind.Absolute);
+                defaultImage.EndInit();
+                defaultImage.Freeze();
+                AlbumArt = defaultImage;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error setting default album art: {ex.Message}");
+                AlbumArt = null;
+            }
+        }
+
         public async Task LoadAlbumArtAsync()
         {
             try
@@ -110,19 +128,24 @@ namespace MusicPlayer.Models
                             var bitmap = new BitmapImage();
                             bitmap.BeginInit();
                             bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                            bitmap.DecodePixelWidth = 1000;  // Set fixed width
-                            bitmap.DecodePixelHeight = 1000; // Set fixed height
+                            bitmap.DecodePixelWidth = 1000;
+                            bitmap.DecodePixelHeight = 1000;
                             bitmap.StreamSource = stream;
                             bitmap.EndInit();
-                            bitmap.Freeze(); // Make it thread-safe
+                            bitmap.Freeze();
                             AlbumArt = bitmap;
                         }
+                    }
+                    else
+                    {
+                        SetDefaultAlbumArt();
                     }
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error loading album art: {ex.Message}");
+                SetDefaultAlbumArt();
             }
         }
 

@@ -384,9 +384,38 @@
                      Margin="380,10,380,10"
                      Background="#FF383838"
                      Foreground="White"
-                     Padding="8,5"
+                     Padding="32,5,8,5"
                      BorderThickness="0"
                      TextChanged="TextBox_TextChanged">
+                <TextBox.Resources>
+                    <!-- Search icon path data -->
+                    <PathGeometry x:Key="SearchIcon">M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z</PathGeometry>
+                </TextBox.Resources>
+
+                <!-- Search icon -->
+                <TextBox.Template>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <Grid>
+                                <Path Data="{StaticResource SearchIcon}"
+                                      Fill="#FFB3B3B3"
+                                      Width="16"
+                                      Height="16"
+                                      Stretch="Uniform"
+                                      HorizontalAlignment="Left"
+                                      Margin="8,0,0,0"/>
+                                <ScrollViewer x:Name="PART_ContentHost"
+                                              Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </TextBox.Template>
+
+                <!-- Placeholder text -->
                 <TextBox.Style>
                     <Style TargetType="TextBox">
                         <Style.Resources>
@@ -396,8 +425,9 @@
                                          Stretch="None"
                                          AlignmentX="Left">
                                 <VisualBrush.Visual>
-                                    <TextBlock Text="Search"
-                                               Foreground="White"/>
+                                    <TextBlock Text="Search for songs, artists, or albums"
+                                               Foreground="White"
+                                               VerticalAlignment="Center"/>
                                 </VisualBrush.Visual>
                             </VisualBrush>
                         </Style.Resources>
@@ -493,55 +523,150 @@
                     </Grid.Style>
                     <StackPanel>
                         <!-- File Management Section -->
-                        <Button Content="Add Files"
-                                Click="AddFiles_Click"
+                        <Button Click="AddFiles_Click"
                                 HorizontalContentAlignment="Left"
                                 Padding="20,12"
-                                Margin="0,5"/>
+                                Margin="0,5">
+                            <Button.Content>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📁"
+                                               FontSize="16"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Add Files"/>
+                                </StackPanel>
+                            </Button.Content>
+                        </Button>
 
-                        <Button Content="Add Folder"
-                                Click="AddFolder_Click"
+                        <Button Click="AddFolder_Click"
                                 HorizontalContentAlignment="Left"
                                 Padding="20,12"
-                                Margin="0,5"/>
+                                Margin="0,5">
+                            <Button.Content>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📂"
+                                               FontSize="16"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Add Folder"/>
+                                </StackPanel>
+                            </Button.Content>
+                        </Button>
 
-                        <Separator Margin="10,10"
+                        <Separator Margin="10,15"
                                    Background="#FF383838"/>
 
                         <!-- View Options -->
-                        <Button Content="Songs"
+                        <Button x:Name="SongsButton"
                                 Click="ViewSongs_Click"
                                 HorizontalContentAlignment="Left"
                                 Padding="20,12"
-                                Margin="0,5"/>
+                                Margin="0,5">
+                            <Button.Content>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🎵"
+                                               FontSize="16"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Songs"/>
+                                </StackPanel>
+                            </Button.Content>
+                            <Button.Style>
+                                <Style TargetType="Button"
+                                       BasedOn="{StaticResource {x:Type Button}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ElementName=SongListView, Path=Visibility}"
+                                                     Value="Visible">
+                                            <Setter Property="Background"
+                                                    Value="#FF383838"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
 
-                        <Button Content="Artists"
+                        <Button x:Name="ArtistsButton"
                                 Click="ViewArtists_Click"
                                 HorizontalContentAlignment="Left"
                                 Padding="20,12"
-                                Margin="0,5"/>
+                                Margin="0,5">
+                            <Button.Content>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="👤"
+                                               FontSize="16"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Artists"/>
+                                </StackPanel>
+                            </Button.Content>
+                            <Button.Style>
+                                <Style TargetType="Button"
+                                       BasedOn="{StaticResource {x:Type Button}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ElementName=ArtistsView, Path=Visibility}"
+                                                     Value="Visible">
+                                            <Setter Property="Background"
+                                                    Value="#FF383838"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
 
-                        <Button Content="Albums"
+                        <Button x:Name="AlbumsButton"
                                 Click="ViewAlbums_Click"
                                 HorizontalContentAlignment="Left"
                                 Padding="20,12"
-                                Margin="0,5"/>
+                                Margin="0,5">
+                            <Button.Content>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="💿"
+                                               FontSize="16"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Albums"/>
+                                </StackPanel>
+                            </Button.Content>
+                            <Button.Style>
+                                <Style TargetType="Button"
+                                       BasedOn="{StaticResource {x:Type Button}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ElementName=AlbumsView, Path=Visibility}"
+                                                     Value="Visible">
+                                            <Setter Property="Background"
+                                                    Value="#FF383838"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
 
-                        <Separator Margin="10,10"
+                        <Separator Margin="10,15"
                                    Background="#FF383838"/>
 
                         <!-- Playlists Section -->
-                        <Button Content="Playlists"
-                                HorizontalContentAlignment="Left"
+                        <Button HorizontalContentAlignment="Left"
                                 Padding="20,12"
-                                Margin="0,5"/>
+                                Margin="0,5">
+                            <Button.Content>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📑"
+                                               FontSize="16"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Playlists"/>
+                                </StackPanel>
+                            </Button.Content>
+                        </Button>
 
-                        <!-- Settings at the bottom -->
-                        <Button Content="Settings"
-                                HorizontalContentAlignment="Left"
+                        <!-- Settings Button -->
+                        <Button HorizontalContentAlignment="Left"
                                 Padding="20,12"
                                 Margin="0,5"
-                                VerticalAlignment="Bottom"/>
+                                VerticalAlignment="Bottom">
+                            <Button.Content>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚙️"
+                                               FontSize="16"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Settings"/>
+                                </StackPanel>
+                            </Button.Content>
+                        </Button>
                     </StackPanel>
                 </Grid>
 
@@ -556,26 +681,39 @@
                     <ListView x:Name="SongListView"
                               Style="{StaticResource FadeTransitionStyle}"
                               Background="Transparent"
+                              Margin="10, 20, 10, 100"
                               BorderThickness="0">
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
                                 <Setter Property="Background"
                                         Value="Transparent"/>
                                 <Setter Property="Padding"
-                                        Value="10,8"/>
+                                        Value="0,5,0,5"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="ListViewItem">
                                             <Border Background="{TemplateBinding Background}"
                                                     Padding="{TemplateBinding Padding}"
+                                                    CornerRadius="10"
+                                                    Margin="5"
                                                     BorderThickness="0">
                                                 <ContentPresenter/>
                                             </Border>
                                             <ControlTemplate.Triggers>
+                                                <Trigger Property="ItemsControl.AlternationIndex"
+                                                         Value="0">
+                                                    <Setter Property="Background"
+                                                            Value="#3D333B3C"/>
+                                                </Trigger>
+                                                <Trigger Property="ItemsControl.AlternationIndex"
+                                                         Value="1">
+                                                    <Setter Property="Background"
+                                                            Value="Transparent"/>
+                                                </Trigger>
                                                 <Trigger Property="IsMouseOver"
                                                          Value="True">
                                                     <Setter Property="Background"
-                                                            Value="#8c8c8c"/>
+                                                            Value="#3D3B3C"/>
                                                     <Setter Property="Cursor"
                                                             Value="Hand"/>
                                                 </Trigger>
@@ -596,18 +734,25 @@
                                       Height="60">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="60"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="2*"/>
+                                        <ColumnDefinition Width="1.5*"/>
+                                        <ColumnDefinition Width="100"/>
                                     </Grid.ColumnDefinitions>
-                                    <Image Source="{Binding AlbumArt}"
-                                           Width="50"
-                                           Height="50"/>
+
+                                    <Image Width="45"
+                                           Height="45"
+                                           Source="{Binding AlbumArt}"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Center"
+                                           Margin="5,0,0,0"/>
+
                                     <TextBlock Text="{Binding Title}"
                                                Grid.Column="1"
                                                FontSize="15"
                                                FontWeight="SemiBold"
-                                               VerticalAlignment="Center">
+                                               VerticalAlignment="Center"
+                                               Margin="10,0,0,0"
+                                               TextTrimming="CharacterEllipsis">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground"
@@ -624,16 +769,22 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
+
                                     <TextBlock Text="{Binding Artist}"
                                                Grid.Column="2"
                                                Foreground="White"
                                                FontSize="14"
-                                               VerticalAlignment="Center"/>
+                                               VerticalAlignment="Center"
+                                               Margin="10,0,0,0"
+                                               TextTrimming="CharacterEllipsis"/>
+
                                     <TextBlock Text="{Binding Duration}"
                                                Grid.Column="3"
                                                Foreground="White"
                                                FontSize="14"
-                                               VerticalAlignment="Center"/>
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               Margin="0,0,20,0"/>
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
@@ -663,9 +814,9 @@
 
                                     <Border Grid.Row="0"
                                             CornerRadius="8">
-                                        <Image Source="{Binding AlbumArt}"
-                                               Width="200"
+                                        <Image Width="200"
                                                Height="200"
+                                               Source="{Binding AlbumArt}"
                                                Stretch="UniformToFill">
                                             <Image.Effect>
                                                 <DropShadowEffect BlurRadius="10"
@@ -781,14 +932,14 @@
                                                 Storyboard.TargetName="DetailBackgroundScale"
                                                 Storyboard.TargetProperty="ScaleX"
                                                 From="1.1"
-                                                    To="1.2"
+                                                To="1.2"
                                                 Duration="0:0:30"
                                                 AutoReverse="True"/>
                                             <DoubleAnimation
                                                 Storyboard.TargetName="DetailBackgroundScale"
                                                 Storyboard.TargetProperty="ScaleY"
                                                 From="1.1"
-                                                    To="1.2"
+                                                To="1.2"
                                                 Duration="0:0:30"
                                                 AutoReverse="True"/>
 
@@ -797,14 +948,14 @@
                                                 Storyboard.TargetName="DetailBackgroundTranslate"
                                                 Storyboard.TargetProperty="X"
                                                 From="0"
-                                                    To="-50"
+                                                To="-50"
                                                 Duration="0:0:40"
                                                 AutoReverse="True"/>
                                             <DoubleAnimation
                                                 Storyboard.TargetName="DetailBackgroundTranslate"
                                                 Storyboard.TargetProperty="Y"
                                                 From="0"
-                                                    To="-30"
+                                                To="-30"
                                                 Duration="0:0:35"
                                                 AutoReverse="True"/>
                                         </Storyboard>

@@ -23,6 +23,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Resource Include="Resources\default_song.png" />
+		<Resource Include="Resources\default_album.png" />
 		<Resource Include="Resources\default_artist.png" />
 	</ItemGroup>
 

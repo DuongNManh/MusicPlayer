@@ -818,7 +818,30 @@ namespace MusicPlayer.Views
 
         private void TextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
+            var searchText = ((System.Windows.Controls.TextBox)sender).Text.ToLower();
 
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                // If search is empty, restore original playlist
+                SongListView.ItemsSource = originalPlaylist;
+                return;
+            }
+
+            // Filter songs based on search text
+            var filteredSongs = originalPlaylist.Where(song =>
+                song.Title?.ToLower().Contains(searchText) == true ||
+                song.Artist?.ToLower().Contains(searchText) == true ||
+                song.Album?.ToLower().Contains(searchText) == true
+            ).ToList();
+
+            // Update the ListView with filtered results
+            SongListView.ItemsSource = filteredSongs;
+
+            // Switch to Songs view if not already visible
+            SongListView.Visibility = Visibility.Visible;
+            AlbumsView.Visibility = Visibility.Collapsed;
+            ArtistsView.Visibility = Visibility.Collapsed;
+            SongDetailView.Visibility = Visibility.Collapsed;
         }
 
         private void ViewArtistSongs(ArtistInfo artistInfo)
