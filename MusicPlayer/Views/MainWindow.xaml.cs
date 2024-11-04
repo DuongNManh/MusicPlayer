@@ -47,6 +47,7 @@ namespace MusicPlayer.Views
             InitializePlayer();
             InitializeVisualization();
             LoadCachedData();
+            LoadSavedPlaylist();
 
             // Add cleanup when window closes
             this.Closing += MainWindow_Closing;
@@ -1011,6 +1012,52 @@ namespace MusicPlayer.Views
             {
                 ShowSongDetails(currentSong);
             }
+        }
+
+        private void LoadSavedPlaylist()
+        {
+            try
+            {
+                string playlistFile = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "saved_playlist.json");
+                if (File.Exists(playlistFile))
+                {
+                    string jsonString = File.ReadAllText(playlistFile);
+                    var savedPaths = JsonSerializer.Deserialize<List<string>>(jsonString);
+
+                    foreach (string path in savedPaths)
+                    {
+                        if (File.Exists(path)) // Only add if file still exists
+                        {
+                            AddSongToPlaylist(path);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading saved playlist: {ex.Message}");
+            }
+        }
+
+        private void SaveCurrentPlaylist()
+        {
+            try
+            {
+                string playlistFile = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "saved_playlist.json");
+                var playlist = originalPlaylist.Select(s => s.FilePath).ToList();
+                string jsonString = JsonSerializer.Serialize(playlist);
+                File.WriteAllText(playlistFile, jsonString);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error saving playlist: {ex.Message}");
+            }
+        }
+
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            SaveCurrentPlaylist();
+            base.OnClosing(e);
         }
     }
 }
