@@ -731,8 +731,8 @@
                     <ListView x:Name="SongListView"
                               Style="{StaticResource FadeTransitionStyle}"
                               Background="Transparent"
-                              Margin="10, 20, 10, 100"
-                              BorderThickness="0">
+                              BorderThickness="0"
+                              Margin="10,20,10,100">
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
                                 <Setter Property="Background"
@@ -844,28 +844,31 @@
                     <ListView x:Name="AlbumsView"
                               Style="{StaticResource FadeTransitionStyle}"
                               Visibility="Collapsed"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                               Background="Transparent"
-                              BorderThickness="0">
+                              BorderThickness="0"
+                              Margin="10,20,10,100">
                         <ListView.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Horizontal"/>
+                                <WrapPanel Orientation="Horizontal"
+                                           HorizontalAlignment="Center"/>
                             </ItemsPanelTemplate>
                         </ListView.ItemsPanel>
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Grid Width="200"
-                                      Height="280"
+                                <Grid Width="180"
+                                      Height="240"
                                       Margin="10"
                                       MouseLeftButtonUp="AlbumItem_Click">
                                     <Grid.RowDefinitions>
-                                        <RowDefinition Height="200"/>
+                                        <RowDefinition Height="180"/>
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
 
                                     <Border Grid.Row="0"
                                             CornerRadius="8">
-                                        <Image Width="200"
-                                               Height="200"
+                                        <Image Width="180"
+                                               Height="180"
                                                Source="{Binding AlbumArt}"
                                                Stretch="UniformToFill">
                                             <Image.Effect>
@@ -882,14 +885,20 @@
                                                    Foreground="White"
                                                    FontSize="16"
                                                    FontWeight="SemiBold"
+                                                   TextAlignment="Center"
+                                                   TextWrapping="Wrap"
                                                    TextTrimming="CharacterEllipsis"/>
                                         <TextBlock Text="{Binding Artist}"
                                                    Foreground="#FFB3B3B3"
                                                    FontSize="14"
-                                                   TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding SongCount, StringFormat={}{0} songs}"
+                                                   TextAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Margin="0,4,0,0"/>
+                                        <TextBlock Text="{Binding SongCount, StringFormat='{}{0} songs'}"
                                                    Foreground="#FFB3B3B3"
                                                    FontSize="12"
+                                                   TextAlignment="Center"
                                                    Margin="0,4,0,0"/>
                                     </StackPanel>
                                 </Grid>
@@ -901,11 +910,14 @@
                     <ListView x:Name="ArtistsView"
                               Style="{StaticResource FadeTransitionStyle}"
                               Visibility="Collapsed"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                               Background="Transparent"
-                              BorderThickness="0">
+                              BorderThickness="0"
+                              Margin="10,20,10,100">
                         <ListView.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Horizontal"/>
+                                <WrapPanel Orientation="Horizontal"
+                                           HorizontalAlignment="Center"/>
                             </ItemsPanelTemplate>
                         </ListView.ItemsPanel>
                         <ListView.ItemTemplate>
@@ -942,8 +954,9 @@
                                                    FontSize="16"
                                                    FontWeight="SemiBold"
                                                    TextAlignment="Center"
+                                                   TextWrapping="Wrap"
                                                    TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding SongCount, StringFormat={}{0} songs}"
+                                        <TextBlock Text="{Binding SongCount, StringFormat='{}{0} songs'}"
                                                    Foreground="#FFB3B3B3"
                                                    FontSize="12"
                                                    TextAlignment="Center"
