@@ -445,10 +445,18 @@
 
         <!-- Main Content Area with Background -->
         <Grid Grid.Row="1"
-              Grid.RowSpan="2">
+              Grid.RowSpan="2"
+              ClipToBounds="True">
             <!-- Background for entire content area -->
             <Image x:Name="MainBackgroundImage"
-                   Stretch="UniformToFill">
+                   Grid.Row="1"
+                   Margin="0,0,0,0"
+                   Stretch="UniformToFill"
+                   VerticalAlignment="Center"
+                   Panel.ZIndex="0"
+                   RenderOptions.BitmapScalingMode="LowQuality"
+                   RenderOptions.CacheInvalidationThresholdMinimum="1.0"
+                   RenderOptions.CacheInvalidationThresholdMaximum="2.0">
                 <Image.Style>
                     <Style TargetType="Image">
                         <Style.Triggers>
@@ -480,12 +488,20 @@
                     </Style>
                 </Image.Style>
                 <Image.Effect>
-                    <BlurEffect Radius="50"/>
+                    <BlurEffect Radius="50"
+                                RenderingBias="Performance"/>
                 </Image.Effect>
             </Image>
 
+            <!-- Add a semi-transparent overlay for the header -->
+            <Border Grid.Row="0"
+                    Height="0"
+                    VerticalAlignment="Center"
+                    Background="#FF181818"
+                    Panel.ZIndex="1"/>
+
             <!-- Main Content -->
-            <Grid>
+            <Grid Panel.ZIndex="2">
                 <Grid.ColumnDefinitions>
                     <!-- Make navigation column collapsible -->
                     <ColumnDefinition x:Name="NavColumn"
@@ -506,17 +522,51 @@
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
                                             <Storyboard>
-                                                <ThicknessAnimation Storyboard.TargetProperty="Margin"
-                                                                    From="-200,5,0,95"
-                                                                    To="0,5,0,95"
-                                                                    Duration="0:0:0.3">
+                                                <ThicknessAnimation
+                                                    Storyboard.TargetProperty="Margin"
+                                                    From="-250,5,0,95"
+                                                    To="0,5,0,95"
+                                                    Duration="0:0:0.3">
                                                     <ThicknessAnimation.EasingFunction>
                                                         <CubicEase EasingMode="EaseOut"/>
                                                     </ThicknessAnimation.EasingFunction>
                                                 </ThicknessAnimation>
+                                                <DoubleAnimation
+                                                    Storyboard.TargetProperty="Opacity"
+                                                    From="0"
+                                                    To="1"
+                                                    Duration="0:0:0.3">
+                                                    <DoubleAnimation.EasingFunction>
+                                                        <CubicEase EasingMode="EaseOut"/>
+                                                    </DoubleAnimation.EasingFunction>
+                                                </DoubleAnimation>
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <ThicknessAnimation
+                                                    Storyboard.TargetProperty="Margin"
+                                                    From="0,5,0,95"
+                                                    To="-250,5,0,95"
+                                                    Duration="0:0:0.3">
+                                                    <ThicknessAnimation.EasingFunction>
+                                                        <CubicEase EasingMode="EaseIn"/>
+                                                    </ThicknessAnimation.EasingFunction>
+                                                </ThicknessAnimation>
+                                                <DoubleAnimation
+                                                    Storyboard.TargetProperty="Opacity"
+                                                    From="1"
+                                                    To="0"
+                                                    Duration="0:0:0.3">
+                                                    <DoubleAnimation.EasingFunction>
+                                                        <CubicEase EasingMode="EaseIn"/>
+                                                    </DoubleAnimation.EasingFunction>
+                                                </DoubleAnimation>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
                                 </Trigger>
                             </Style.Triggers>
                         </Style>
@@ -912,7 +962,10 @@
                         <!-- Single background for entire detail view -->
                         <Image x:Name="DetailBackgroundImage"
                                Stretch="UniformToFill"
-                               Opacity="0.3">
+                               Opacity="0.15"
+                               RenderOptions.BitmapScalingMode="LowQuality"
+                               RenderOptions.CacheInvalidationThresholdMinimum="1.0"
+                               RenderOptions.CacheInvalidationThresholdMaximum="2.0">
                             <Image.RenderTransform>
                                 <TransformGroup>
                                     <ScaleTransform x:Name="DetailBackgroundScale"
@@ -923,49 +976,58 @@
                                                         Y="0"/>
                                 </TransformGroup>
                             </Image.RenderTransform>
+                            <Image.Effect>
+                                <BlurEffect Radius="30"
+                                            RenderingBias="Performance"/>
+                            </Image.Effect>
                             <Image.Triggers>
                                 <EventTrigger RoutedEvent="Image.Loaded">
                                     <BeginStoryboard>
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Slow zoom animation -->
+                                        <Storyboard>
                                             <DoubleAnimation
                                                 Storyboard.TargetName="DetailBackgroundScale"
                                                 Storyboard.TargetProperty="ScaleX"
                                                 From="1.1"
-                                                To="1.2"
+                                                To="1.15"
                                                 Duration="0:0:30"
-                                                AutoReverse="True"/>
+                                                AutoReverse="True"
+                                                RepeatBehavior="Forever">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <PowerEase Power="2"
+                                                               EasingMode="EaseInOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
                                             <DoubleAnimation
                                                 Storyboard.TargetName="DetailBackgroundScale"
                                                 Storyboard.TargetProperty="ScaleY"
                                                 From="1.1"
-                                                To="1.2"
+                                                To="1.15"
                                                 Duration="0:0:30"
-                                                AutoReverse="True"/>
-
-                                            <!-- Slow pan animation -->
-                                            <DoubleAnimation
-                                                Storyboard.TargetName="DetailBackgroundTranslate"
-                                                Storyboard.TargetProperty="X"
-                                                From="0"
-                                                To="-50"
-                                                Duration="0:0:40"
-                                                AutoReverse="True"/>
-                                            <DoubleAnimation
-                                                Storyboard.TargetName="DetailBackgroundTranslate"
-                                                Storyboard.TargetProperty="Y"
-                                                From="0"
-                                                To="-30"
-                                                Duration="0:0:35"
-                                                AutoReverse="True"/>
+                                                AutoReverse="True"
+                                                RepeatBehavior="Forever">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <PowerEase Power="2"
+                                                               EasingMode="EaseInOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </EventTrigger>
                             </Image.Triggers>
-                            <Image.Effect>
-                                <BlurEffect Radius="30"/>
-                            </Image.Effect>
                         </Image>
+
+                        <!-- Add dark gradient overlay with bitmap caching -->
+                        <Grid CacheMode="BitmapCache">
+                            <Grid.Background>
+                                <LinearGradientBrush StartPoint="0,0"
+                                                     EndPoint="0,1">
+                                    <GradientStop Color="#CC000000"
+                                                  Offset="0"/>
+                                    <GradientStop Color="#99000000"
+                                                  Offset="1"/>
+                                </LinearGradientBrush>
+                            </Grid.Background>
+                        </Grid>
 
                         <Grid>
                             <Grid.RowDefinitions>
@@ -976,7 +1038,8 @@
 
                             <!-- Main Content Section -->
                             <Grid Grid.Row="0"
-                                  Margin="40">
+                                  Margin="40"
+                                  CacheMode="BitmapCache">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>

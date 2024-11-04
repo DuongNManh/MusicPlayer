@@ -16,6 +16,8 @@ using MusicPlayer.Models;
 using System.Windows.Input;
 using System.Windows.Forms;
 using NAudio.Wave;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 
 namespace MusicPlayer.Views
 {
@@ -34,14 +36,17 @@ namespace MusicPlayer.Views
         private readonly MusicMetadataService _musicMetadataService;
         private readonly MetadataCacheService _cacheService;
         private AudioVisualizationService _visualizationService;
-        private WaveOutEvent _waveOutDevice;
+        //private WaveOutEvent _waveOutDevice;
         private AudioFileReader _audioFileReader;
         private DispatcherTimer visualizationTimer;
         private WaveOut silentOutput;
+        private readonly BitmapCache _backgroundBitmapCache = new BitmapCache();
+        private readonly BitmapCache _detailBackgroundBitmapCache = new BitmapCache();
 
         public MainWindow()
         {
             InitializeComponent();
+            InitializeBackgroundCaching();
             _cacheService = new MetadataCacheService();
             _musicMetadataService = new MusicMetadataService(_cacheService);
             InitializePlayer();
@@ -69,9 +74,9 @@ namespace MusicPlayer.Views
 
         private void InitializeVisualization()
         {
-            // Initialize visualization with 256 bars
+            // Initialize visualization with 128 bars
             _visualizationService = new AudioVisualizationService(VisualizationCanvas, 256);
-            _waveOutDevice = new WaveOutEvent();
+            //_waveOutDevice = new WaveOutEvent();
         }
 
         private void LoadCachedData()
@@ -340,6 +345,11 @@ namespace MusicPlayer.Views
                 {
                     var randomIndex = remainingIndices[random.Next(remainingIndices.Count)];
                     PlaylistBox.SelectedIndex = randomIndex;
+                    // Refresh song details if detail view is visible
+                    if (SongDetailView.Visibility == Visibility.Visible)
+                    {
+                        ShowSongDetails(PlaylistBox.Items[randomIndex] as SongInfo);
+                    }
                 }
                 else
                 {
@@ -353,6 +363,11 @@ namespace MusicPlayer.Views
             {
                 // Normal sequential playback
                 PlaylistBox.SelectedIndex++;
+                // Refresh song details if detail view is visible
+                if (SongDetailView.Visibility == Visibility.Visible)
+                {
+                    ShowSongDetails(PlaylistBox.Items[PlaylistBox.SelectedIndex] as SongInfo);
+                }
             }
             else
             {
@@ -434,12 +449,22 @@ namespace MusicPlayer.Views
                 {
                     var randomIndex = previousIndices[random.Next(previousIndices.Count)];
                     PlaylistBox.SelectedIndex = randomIndex;
+                    // Update detail view if visible
+                    if (SongDetailView.Visibility == Visibility.Visible)
+                    {
+                        ShowSongDetails(PlaylistBox.Items[randomIndex] as SongInfo);
+                    }
                 }
             }
             else if (PlaylistBox.SelectedIndex > 0)
             {
                 // Normal sequential navigation
                 PlaylistBox.SelectedIndex--;
+                // Update detail view if visible
+                if (SongDetailView.Visibility == Visibility.Visible)
+                {
+                    ShowSongDetails(PlaylistBox.Items[PlaylistBox.SelectedIndex] as SongInfo);
+                }
             }
         }
 
@@ -460,12 +485,22 @@ namespace MusicPlayer.Views
                 {
                     var randomIndex = nextIndices[random.Next(nextIndices.Count)];
                     PlaylistBox.SelectedIndex = randomIndex;
+                    // Update detail view if visible
+                    if (SongDetailView.Visibility == Visibility.Visible)
+                    {
+                        ShowSongDetails(PlaylistBox.Items[randomIndex] as SongInfo);
+                    }
                 }
             }
             else if (PlaylistBox.SelectedIndex < PlaylistBox.Items.Count - 1)
             {
                 // Normal sequential navigation
                 PlaylistBox.SelectedIndex++;
+                // Update detail view if visible
+                if (SongDetailView.Visibility == Visibility.Visible)
+                {
+                    ShowSongDetails(PlaylistBox.Items[PlaylistBox.SelectedIndex] as SongInfo);
+                }
             }
         }
 
@@ -549,21 +584,55 @@ namespace MusicPlayer.Views
             }
         }
 
-        private void ShowSongDetails(SongInfo song)
+        private async void ShowSongDetails(SongInfo song)
         {
             if (song == null) return;
 
             try
             {
-                // Clear previous song details first
+                // Disable visualization when showing song details
+                _visualizationService?.SetActive(true);
+
+                // Create fade animations
+                var fadeOutAnimation = new DoubleAnimation
+                {
+                    From = 1.0,
+                    To = 0.0,
+                    Duration = TimeSpan.FromMilliseconds(300),
+                    EasingFunction = new QuadraticEase()
+                };
+
+                var fadeInAnimation = new DoubleAnimation
+                {
+                    From = 0.0,
+                    To = 1.0,
+                    Duration = TimeSpan.FromMilliseconds(300),
+                    EasingFunction = new QuadraticEase()
+                };
+
+                // Fade out current content
+                DetailAlbumArtImage.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
+                DetailBackgroundImage.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
+                DetailArtistImage.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
+                DetailTitleText.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
+                DetailArtistText.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
+                DetailAlbumText.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
+
+                // Wait for fade out to complete
+                await Task.Delay(300);
+
+                // Clear previous song details
                 ClearSongDetails();
 
-                // Update background and album art
+                // Update background with optimized method
                 if (song.AlbumArt != null)
                 {
-                    DetailBackgroundImage.Source = song.AlbumArt;
+                    await UpdateBackgroundImage(song.AlbumArt);
+                }
+                else
+                {
                     DetailAlbumArtImage.Source = song.AlbumArt;
-                    MainBackgroundImage.Source = song.AlbumArt;
+                    await LoadAlbumArtAsync(song);
                 }
 
                 // Update text content
@@ -574,14 +643,25 @@ namespace MusicPlayer.Views
                 // Load artist image if available
                 if (!string.IsNullOrEmpty(song.Artist) && song.Artist != "Unknown Artist")
                 {
-                    LoadArtistImage(song.Artist);
+                    await LoadArtistImageAsync(song.Artist);
                 }
 
-                // Switch views
-                SongListView.Visibility = Visibility.Collapsed;
-                AlbumsView.Visibility = Visibility.Collapsed;
-                ArtistsView.Visibility = Visibility.Collapsed;
-                SongDetailView.Visibility = Visibility.Visible;
+                // Switch views if needed
+                if (SongDetailView.Visibility != Visibility.Visible)
+                {
+                    SongListView.Visibility = Visibility.Collapsed;
+                    AlbumsView.Visibility = Visibility.Collapsed;
+                    ArtistsView.Visibility = Visibility.Collapsed;
+                    SongDetailView.Visibility = Visibility.Visible;
+                }
+
+                // Fade in new content
+                DetailAlbumArtImage.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
+                DetailBackgroundImage.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
+                DetailArtistImage.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
+                DetailTitleText.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
+                DetailArtistText.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
+                DetailAlbumText.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
             }
             catch (Exception ex)
             {
@@ -589,13 +669,11 @@ namespace MusicPlayer.Views
             }
         }
 
-        private async void LoadArtistImage(string artist)
+        private async Task<BitmapImage> LoadArtistImageAsync(string artist)
         {
             try
             {
                 System.Diagnostics.Debug.WriteLine($"Loading image for artist: {artist}");
-                // Clear previous artist image first
-                DetailArtistImage.Source = null;
 
                 // Load new artist image
                 var artistImage = await _musicMetadataService.GetArtistImageAsync(artist);
@@ -603,20 +681,51 @@ namespace MusicPlayer.Views
                 {
                     DetailArtistImage.Source = artistImage;
                     System.Diagnostics.Debug.WriteLine("Artist image loaded successfully");
+                    return artistImage;
                 }
                 else
                 {
                     System.Diagnostics.Debug.WriteLine("No artist image found");
+                    return null;
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error loading artist image: {ex.Message}");
+                return null;
+            }
+        }
+
+        // Update the LoadArtistImage method to use the async version
+        private async void LoadArtistImage(string artist)
+        {
+            DetailArtistImage.Source = null;
+            await LoadArtistImageAsync(artist);
+        }
+
+        private async Task LoadAlbumArtAsync(SongInfo song)
+        {
+            try
+            {
+                await song.LoadAlbumArtAsync();
+                if (song.AlbumArt != null)
+                {
+                    DetailBackgroundImage.Source = song.AlbumArt;
+                    DetailAlbumArtImage.Source = song.AlbumArt;
+                    MainBackgroundImage.Source = song.AlbumArt;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading album art: {ex.Message}");
             }
         }
 
         private void BackToLibrary_Click(object sender, RoutedEventArgs e)
         {
+            // Re-enable visualization when returning to library
+            _visualizationService?.SetActive(false);
+
             // Clear song details when going back to library
             ClearSongDetails();
 
@@ -1058,6 +1167,54 @@ namespace MusicPlayer.Views
         {
             SaveCurrentPlaylist();
             base.OnClosing(e);
+        }
+
+        private void InitializeBackgroundCaching()
+        {
+            // Set up bitmap caching for background images
+            if (MainBackgroundImage != null)
+            {
+                MainBackgroundImage.CacheMode = _backgroundBitmapCache;
+            }
+            if (DetailBackgroundImage != null)
+            {
+                DetailBackgroundImage.CacheMode = _detailBackgroundBitmapCache;
+            }
+        }
+
+        private async Task UpdateBackgroundImage(ImageSource source)
+        {
+            try
+            {
+                if (source == null)
+                {
+                    MainBackgroundImage.Source = null;
+                    DetailBackgroundImage.Source = null;
+                    return;
+                }
+
+                // Create a smaller version for background
+                var bitmap = source as BitmapSource;
+                if (bitmap != null)
+                {
+                    // Scale down the image for background use
+                    var scaledBitmap = new TransformedBitmap(bitmap,
+                        new ScaleTransform(0.5, 0.5)); // Reduce size by 50%
+
+                    // Freeze the bitmap to improve performance
+                    if (scaledBitmap.CanFreeze)
+                    {
+                        scaledBitmap.Freeze();
+                    }
+                    DetailAlbumArtImage.Source = bitmap;
+                    MainBackgroundImage.Source = scaledBitmap;
+                    DetailBackgroundImage.Source = scaledBitmap;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating background: {ex.Message}");
+            }
         }
     }
 }

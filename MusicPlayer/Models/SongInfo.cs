@@ -102,7 +102,7 @@ namespace MusicPlayer.Models
             {
                 var defaultImage = new BitmapImage();
                 defaultImage.BeginInit();
-                defaultImage.UriSource = new Uri("pack://application:,,,/MusicPlayer;component/Resources/default_song.png", UriKind.Absolute);
+                defaultImage.UriSource = new Uri("pack://application:,,,/MusicPlayer;component/Resources/default_album.png", UriKind.Absolute);
                 defaultImage.EndInit();
                 defaultImage.Freeze();
                 AlbumArt = defaultImage;

@@ -19,6 +19,10 @@ namespace MusicPlayer.Services
         private readonly double[] _frequencyBands;
         private readonly double _sampleRate = 44100;
         private readonly object _lockObject = new object();
+        private readonly int _updateInterval = 33; // ~30 FPS instead of unlimited
+        private DateTime _lastUpdate = DateTime.MinValue;
+        private bool _isActive = true;
+        private const int MINIMUM_UPDATE_THRESHOLD = 2; // Minimum height change to trigger update
 
         public AudioVisualizationService(Canvas visualizationCanvas, int barsCount = 128, int maxHeight = 150)
         {
@@ -33,18 +37,73 @@ namespace MusicPlayer.Services
             InitializeVisualBars();
 
             visualizationCanvas.SizeChanged += (s, e) => System.Windows.Application.Current.Dispatcher.InvokeAsync(() => UpdateBarsLayout());
+            visualizationCanvas.IsVisibleChanged += (s, e) =>
+            {
+                _isActive = visualizationCanvas.IsVisible;
+                if (!_isActive)
+                {
+                    Clear();
+                }
+            };
         }
 
         private double[] CreateFrequencyBands(int bandCount)
         {
             var bands = new double[bandCount + 1];
-            double minFreq = 20;
-            double maxFreq = 20000;
+
+            // Modified frequency ranges:
+            // Band 1: 250-500 Hz (Low-mids)
+            // Band 2: 500-2000 Hz (Mids)
+            // Band 3: 2000-4000 Hz (Upper-mids)
+            // Band 4: 4000-8000 Hz (Presence)
+            // Band 5: 8000-16000 Hz (Brilliance)
+            // Band 6: 16000-20000 Hz (Air)
+
+            int lowMidBars = bandCount / 6;           // 250-500 Hz
+            int midBars = bandCount / 6;              // 500-2000 Hz
+            int upperMidBars = bandCount / 6;         // 2000-4000 Hz
+            int presenceBars = bandCount / 6;         // 4000-8000 Hz
+            int brillianceBars = bandCount / 6;       // 8000-16000 Hz
+            int airBars = bandCount - lowMidBars - midBars - upperMidBars - presenceBars - brillianceBars;  // 16000-20000 Hz
 
             for (int i = 0; i <= bandCount; i++)
             {
-                double percent = (double)i / bandCount;
-                bands[i] = minFreq * Math.Pow(maxFreq / minFreq, Math.Pow(percent, 0.5));
+                if (i <= lowMidBars)
+                {
+                    // Low-mids (250-500 Hz)
+                    double percent = (double)i / lowMidBars;
+                    bands[i] = 250.0 * Math.Pow(500.0 / 250.0, percent);
+                }
+                else if (i <= lowMidBars + midBars)
+                {
+                    // Mids (500-2000 Hz)
+                    double percent = (double)(i - lowMidBars) / midBars;
+                    bands[i] = 500.0 * Math.Pow(2000.0 / 500.0, percent);
+                }
+                else if (i <= lowMidBars + midBars + upperMidBars)
+                {
+                    // Upper-mids (2000-4000 Hz)
+                    double percent = (double)(i - lowMidBars - midBars) / upperMidBars;
+                    bands[i] = 2000.0 * Math.Pow(4000.0 / 2000.0, percent);
+                }
+                else if (i <= lowMidBars + midBars + upperMidBars + presenceBars)
+                {
+                    // Presence (4000-8000 Hz)
+                    double percent = (double)(i - lowMidBars - midBars - upperMidBars) / presenceBars;
+                    bands[i] = 4000.0 * Math.Pow(8000.0 / 4000.0, percent);
+                }
+                else if (i <= lowMidBars + midBars + upperMidBars + presenceBars + brillianceBars)
+                {
+                    // Brilliance (8000-16000 Hz)
+                    double percent = (double)(i - lowMidBars - midBars - upperMidBars - presenceBars) / brillianceBars;
+                    bands[i] = 8000.0 * Math.Pow(16000.0 / 8000.0, percent);
+                }
+                else
+                {
+                    // Air (16000-20000 Hz)
+                    double percent = (double)(i - lowMidBars - midBars - upperMidBars - presenceBars - brillianceBars) / airBars;
+                    bands[i] = 16000.0 * Math.Pow(20000.0 / 16000.0, percent);
+                }
             }
             return bands;
         }
@@ -84,16 +143,18 @@ namespace MusicPlayer.Services
                 EndPoint = new System.Windows.Point(0.5, 1),
                 GradientStops = new GradientStopCollection
                 {
-                    new GradientStop(System.Windows.Media.Color.FromArgb(128, 255, 85, 0), 0),
-                    new GradientStop(System.Windows.Media.Color.FromArgb(128, 255, 85, 1), 0.3),
-                    new GradientStop(System.Windows.Media.Color.FromArgb(128, 255, 85, 2), 1)
+                    new GradientStop(System.Windows.Media.Color.FromArgb(128, 255, 85, 0), 0)
                 }
             };
         }
 
         public void UpdateSpectrum(float[] audioData)
         {
-            if (audioData == null || audioData.Length < _fftLength) return;
+            if (audioData == null || audioData.Length < _fftLength || !_isActive) return;
+
+            var now = DateTime.Now;
+            if ((now - _lastUpdate).TotalMilliseconds < _updateInterval) return;
+            _lastUpdate = now;
 
             Task.Run(() =>
             {
@@ -127,30 +188,50 @@ namespace MusicPlayer.Services
                             double freq = j * binWidth;
 
                             double weight = 1.0;
-                            if (freq < 40)         // Sub-bass (20-40 Hz)
+                            if (freq < 500)          // Low-mids
+                            {
                                 weight = 2.0;
-                            else if (freq < 80)    // Bass (40-80 Hz)
-                                weight = 2.0;
-                            else if (freq < 160)   // Bass (80-160 Hz)
-                                weight = 2.0;
-                            else if (freq < 300)   // Low-mids (160-300 Hz)
-                                weight = 2.0;
-                            else if (freq < 500)   // Mids (300-500 Hz)
-                                weight = 2.0;
-                            else if (freq < 2000)  // Upper-mids (500-2000 Hz)
-                                weight = 2.5;
-                            else if (freq < 4000)  // Presence (2-4 kHz)
-                                weight = 3.0;
-                            else if (freq < 8000)  // Brilliance (4-8 kHz)
-                                weight = 3.5;
-                            else                   // Air (8-20 kHz)
-                                weight = 4.0;
+                            }
+                            else if (freq < 2000)    // Mids
+                            {
+                                weight = 2.2;
+                            }
+                            else if (freq < 4000)    // Upper-mids
+                            {
+                                weight = 2.6;
+                            }
+                            else if (freq < 8000)    // Presence
+                            {
+                                weight = 3.4;        // Increased presence boost
+                            }
+                            else if (freq < 16000)   // Brilliance
+                            {
+                                weight = 5.8;        // Increased brilliance boost
+                            }
+                            else                     // Air
+                            {
+                                weight = 3.0;        // Increased air frequencies boost
+                            }
+
+                            // Apply position-based scaling
+                            double binPosition = (double)i / _visualizationBars.Length;
+
+                            // Adjust scaling to emphasize higher frequencies
+                            if (binPosition < 0.2)        // Low-mids region
+                                weight *= 1.0;
+                            else if (binPosition < 0.3)   // Mids
+                                weight *= 1.2;
+                            else if (binPosition < 0.5)   // Upper-mids
+                                weight *= 1.4;
+                            else if (binPosition < 0.7)   // Presence
+                                weight *= 1.6;            // Increased boost
+                            else if (binPosition < 0.85)  // Brilliance
+                                weight *= 1.8;            // Increased boost
+                            else                          // Air
+                                weight *= 2.0;            // Increased boost
 
                             double dbWeight = GetDBWeight(freq);
                             weight *= dbWeight;
-
-                            double freqScale = Math.Log10(freq + 1) / Math.Log10(20000);
-                            weight *= (freqScale);
 
                             sum += magnitude * weight;
                             binCount++;
@@ -162,15 +243,15 @@ namespace MusicPlayer.Services
                         double normalizedPosition = (double)i / _visualizationBars.Length;
 
                         if (normalizedPosition < 0.1)       // Sub-bass (0-10%)
-                            positionScale = 4.0;
-                        else if (normalizedPosition < 0.2)  // Bass (10-20%)
-                            positionScale = 3.5;
-                        else if (normalizedPosition < 0.3)  // Low-mids (20-30%)
                             positionScale = 3.0;
+                        else if (normalizedPosition < 0.2)  // Bass (10-20%)
+                            positionScale = 3.1;
+                        else if (normalizedPosition < 0.3)  // Low-mids (20-30%)
+                            positionScale = 3.3;
                         else if (normalizedPosition < 0.5)  // Mids (30-50%)
                             positionScale = 2.5;
                         else if (normalizedPosition < 0.7)  // Upper-mids (50-70%)
-                            positionScale = 3.0;
+                            positionScale = 2.5;
                         else if (normalizedPosition < 0.85) // Presence (70-85%)
                             positionScale = 3.5;
                         else                               // Air (85-100%)
@@ -182,19 +263,24 @@ namespace MusicPlayer.Services
 
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
+                        if (!_isActive) return;
+
                         for (int i = 0; i < _visualizationBars.Length; i++)
                         {
                             var bar = _visualizationBars[i];
                             double targetHeight = heights[i];
                             double currentHeight = bar.Height;
 
-                            double smoothingUp = 0.5;    // Faster rise
-                            double smoothingDown = 0.1;  // Slower fall
-                            double smoothing = targetHeight > currentHeight ? smoothingUp : smoothingDown;
+                            if (Math.Abs(targetHeight - currentHeight) > MINIMUM_UPDATE_THRESHOLD)
+                            {
+                                double smoothingUp = 0.5;    // Slower rise (was 0.5)
+                                double smoothingDown = 0.1; // Slower fall (was 0.1)
+                                double smoothing = targetHeight > currentHeight ? smoothingUp : smoothingDown;
 
-                            bar.Height = Math.Max(2, (currentHeight * (1 - smoothing)) + (targetHeight * smoothing));
+                                bar.Height = Math.Max(2, (currentHeight * (1 - smoothing)) + (targetHeight * smoothing));
+                            }
                         }
-                    }, System.Windows.Threading.DispatcherPriority.Render);
+                    }, System.Windows.Threading.DispatcherPriority.Background);
                 }
                 catch (Exception ex)
                 {
@@ -205,17 +291,30 @@ namespace MusicPlayer.Services
 
         private double GetDBWeight(double freq)
         {
-            if (freq < 20) return 0.1;
-            else if (freq < 50) return 0.5;
-            else if (freq < 100) return 0.8;
-            else if (freq < 200) return 1.0;
-            else if (freq < 500) return 1.1;
-            else if (freq < 1000) return 1.2;
-            else if (freq < 2000) return 1.3;
-            else if (freq < 4000) return 1.4;
-            else if (freq < 8000) return 1.3;
-            else if (freq < 16000) return 1.2;
-            else return 1.0;
+            if (freq < 500)         // Low-mids
+            {
+                return 1.0;
+            }
+            else if (freq < 2000)   // Mids
+            {
+                return 1.2;
+            }
+            else if (freq < 4000)   // Upper-mids
+            {
+                return 1.4;
+            }
+            else if (freq < 8000)   // Presence
+            {
+                return 1.6;         // Boosted presence
+            }
+            else if (freq < 16000)  // Brilliance
+            {
+                return 1.8;         // Boosted brilliance
+            }
+            else                    // Air
+            {
+                return 2.0;         // Boosted air frequencies
+            }
         }
 
         private float[] CreateWindow(int length)
@@ -238,6 +337,8 @@ namespace MusicPlayer.Services
 
         private void UpdateBarsLayout()
         {
+            if (!_isActive) return;
+
             double barWidth = (_canvas.ActualWidth / _visualizationBars.Length) - 0.5;
             for (int i = 0; i < _visualizationBars.Length; i++)
             {
@@ -283,6 +384,15 @@ namespace MusicPlayer.Services
             }
         }
 
+        public void SetActive(bool active)
+        {
+            _isActive = active;
+            if (!active)
+            {
+                Clear();
+            }
+        }
+
         // Add a Dispose method to properly cleanup resources
         public void Dispose()
         {
@@ -304,6 +414,22 @@ namespace MusicPlayer.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error disposing visualization service: {ex.Message}");
+            }
+        }
+
+        // Add this method to reset the visualization state
+        public void Reset()
+        {
+            lock (_lockObject)
+            {
+                Clear();
+                _lastUpdate = DateTime.MinValue;
+                // Reset FFT buffer
+                for (int i = 0; i < _fftBuffer.Length; i++)
+                {
+                    _fftBuffer[i].X = 0;
+                    _fftBuffer[i].Y = 0;
+                }
             }
         }
     }
