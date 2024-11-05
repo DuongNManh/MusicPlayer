@@ -18,6 +18,9 @@ using System.Windows.Forms;
 using NAudio.Wave;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using NAudio.Gui;
+using System.Windows.Controls.Primitives;
+using MusicPlayer.Animations;
 
 namespace MusicPlayer.Views
 {
@@ -42,6 +45,39 @@ namespace MusicPlayer.Views
         private WaveOut silentOutput;
         private readonly BitmapCache _backgroundBitmapCache = new BitmapCache();
         private readonly BitmapCache _detailBackgroundBitmapCache = new BitmapCache();
+        private SongInfo CurrentSong { get; set; }
+        private int CurrentSongIndex { get; set; } = -1;
+        private List<SongInfo> CurrentPlaylist => originalPlaylist;
+        private bool isCurrentlyPlaying
+        {
+            get => mediaPlayer?.Source != null && PlayButton.Content.ToString() == "⏸";
+            set
+            {
+                PlayButton.Content = value ? "⏸" : "▶";
+                if (value)
+                {
+                    timer.Start();
+                }
+                else
+                {
+                    timer.Stop();
+                }
+            }
+        }
+
+        private bool isNavigationVisible = true;
+        private const double NAV_WIDTH_EXPANDED = 200;
+        private const double NAV_WIDTH_COLLAPSED = 45;
+        private const double NAV_WIDTH_HIDDEN = 0;
+
+        // Add this field to track the current view type
+        private enum ViewType
+        {
+            AllSongs,
+            ArtistSongs,
+            AlbumSongs
+        }
+        private ViewType currentViewType = ViewType.AllSongs;
 
         public MainWindow()
         {
@@ -53,6 +89,10 @@ namespace MusicPlayer.Views
             InitializeVisualization();
             LoadCachedData();
             LoadSavedPlaylist();
+
+            // Set initial navigation state
+            NavColumn.Width = new GridLength(200);
+            isNavigationVisible = true;
 
             // Add cleanup when window closes
             this.Closing += MainWindow_Closing;
@@ -74,7 +114,7 @@ namespace MusicPlayer.Views
 
         private void InitializeVisualization()
         {
-            // Initialize visualization with 128 bars
+            // Initialize visualization with 256 bars
             _visualizationService = new AudioVisualizationService(VisualizationCanvas, 256);
             //_waveOutDevice = new WaveOutEvent();
         }
@@ -118,94 +158,118 @@ namespace MusicPlayer.Views
             if (originalPlaylist == null || originalPlaylist.Count == 0)
                 return;
 
-            var currentSong = PlaylistBox.SelectedItem as SongInfo;
+            var currentSong = CurrentSong;
             var shuffledList = originalPlaylist.OrderBy(x => random.Next()).ToList();
+            originalPlaylist = shuffledList;
 
-            PlaylistBox.Items.Clear();
-            foreach (var song in shuffledList)
-            {
-                if (song != null)
-                    PlaylistBox.Items.Add(song);
-            }
-
+            // Update current song index
             if (currentSong != null && shuffledList.Contains(currentSong))
             {
-                PlaylistBox.SelectedItem = currentSong;
+                CurrentSongIndex = shuffledList.IndexOf(currentSong);
             }
-            else if (PlaylistBox.Items.Count > 0)
+            else if (shuffledList.Count > 0)
             {
-                PlaylistBox.SelectedIndex = 0;
+                CurrentSongIndex = 0;
+                CurrentSong = shuffledList[0];
             }
+
+            // Update any visible views
+            UpdateViews();
         }
 
         private void RestoreOriginalPlaylist()
         {
-            var currentSong = PlaylistBox.SelectedItem as SongInfo;
-
-            PlaylistBox.Items.Clear();
-            foreach (var song in originalPlaylist)
-            {
-                PlaylistBox.Items.Add(song);
-            }
+            var currentSong = CurrentSong;
+            originalPlaylist = originalPlaylist.OrderBy(s => s.FilePath).ToList();
 
             if (currentSong != null)
             {
-                PlaylistBox.SelectedItem = currentSong;
+                CurrentSongIndex = originalPlaylist.IndexOf(currentSong);
             }
+
+            UpdateViews();
         }
 
         private void PlayMedia()
         {
-            if (PlaylistBox.SelectedItem is SongInfo selectedSong)
+            if (CurrentSong == null) return;
+
+            try
             {
-                try
+                // Get current view's playlist
+                var currentViewList = GetCurrentSongList();
+
+                // Verify the current song belongs to the current view context
+                if (!currentViewList.Contains(CurrentSong))
                 {
-                    // Reset previous playing song
-                    foreach (var song in originalPlaylist)
-                    {
-                        song.IsPlaying = false;
-                    }
-
-                    // Set new playing song
-                    selectedSong.IsPlaying = true;
-
-                    // Stop and cleanup previous audio resources
+                    // If current song is not in the current view's context, stop playback
                     StopAndCleanupAudio();
-
-                    // Setup MediaPlayer for audio playback
-                    mediaPlayer.Open(new Uri(selectedSong.FilePath));
-                    mediaPlayer.Play();
-
-                    // Setup visualization capture
-                    _audioFileReader = new AudioFileReader(selectedSong.FilePath);
-                    var waveProvider = new WaveFloatTo16Provider(_audioFileReader);
-                    var captureProvider = new WasapiLoopbackCapture();
-
-                    captureProvider.DataAvailable += (s, e) =>
-                    {
-                        if (e.Buffer.Length > 0)
-                        {
-                            var buffer = new float[e.Buffer.Length / 4];
-                            Buffer.BlockCopy(e.Buffer, 0, buffer, 0, e.Buffer.Length);
-                            _visualizationService.UpdateSpectrum(buffer);
-                        }
-                    };
-
-                    captureProvider.StartRecording();
-
-                    // Update UI
-                    PlayButton.Content = "⏸";
-                    timer.Start();
-                    UpdateNowPlaying(selectedSong);
-
-                    // Refresh views to update UI
-                    PlaylistBox.Items.Refresh();
-                    SongListView.Items.Refresh();
+                    return;
                 }
-                catch (Exception ex)
+
+                // Reset previous playing song
+                foreach (var song in CurrentPlaylist)
                 {
-                    System.Windows.MessageBox.Show($"Error playing media: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    song.IsPlaying = false;
                 }
+
+                // Set new playing song
+                CurrentSong.IsPlaying = true;
+
+                // Stop and cleanup previous audio resources
+                StopAndCleanupAudio();
+
+                // Setup MediaPlayer for audio playback
+                mediaPlayer.Open(new Uri(CurrentSong.FilePath));
+                mediaPlayer.Play();
+
+                // Setup visualization capture
+                _audioFileReader = new AudioFileReader(CurrentSong.FilePath);
+                var waveProvider = new WaveFloatTo16Provider(_audioFileReader);
+                var captureProvider = new WasapiLoopbackCapture();
+
+                captureProvider.DataAvailable += (s, e) =>
+                {
+                    if (e.Buffer.Length > 0)
+                    {
+                        var buffer = new float[e.Buffer.Length / 4];
+                        Buffer.BlockCopy(e.Buffer, 0, buffer, 0, e.Buffer.Length);
+                        _visualizationService.UpdateSpectrum(buffer);
+                    }
+                };
+
+                captureProvider.StartRecording();
+
+                // Update UI with transitions
+                PlayButton.Content = "⏸";
+                timer.Start();
+
+                // Update now playing info
+                NowPlayingTitle.Text = CurrentSong.Title;
+                NowPlayingArtist.Text = CurrentSong.Artist;
+                if (CurrentSong.AlbumArt != null && SongDetailView.Visibility != Visibility.Visible)
+                {
+                    NowPlayingImage.Source = CurrentSong.AlbumArt;
+                    NowPlayingImage.Visibility = Visibility.Visible;
+                }
+
+                // If in detail view, update with transitions
+                if (SongDetailView.Visibility == Visibility.Visible)
+                {
+                    ShowSongDetails(CurrentSong);
+                }
+                else
+                {
+                    // Update background for main view
+                    UpdateBackgroundImage(CurrentSong.AlbumArt);
+                }
+
+                UpdateViews();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in PlayMedia: {ex.Message}");
+                StopAndCleanupAudio();
             }
         }
 
@@ -230,8 +294,7 @@ namespace MusicPlayer.Views
 
         private void RemoveFromPlaylist(SongInfo song)
         {
-            originalPlaylist.Remove(song);
-            PlaylistBox.Items.Remove(song);
+            CurrentPlaylist.Remove(song);
         }
 
         private async void UpdateNowPlaying(SongInfo song)
@@ -241,32 +304,78 @@ namespace MusicPlayer.Views
             try
             {
                 // Update song info in playlist view
-                if (PlaylistBox.SelectedItem is SongInfo selectedSong)
+                if (CurrentSong == song)
                 {
-                    selectedSong.Title = song.Title;
-                    selectedSong.Artist = song.Artist;
-                    selectedSong.Album = song.Album;
+                    CurrentSong.Title = song.Title;
+                    CurrentSong.Artist = song.Artist;
+                    CurrentSong.Album = song.Album;
 
-                    // Ensure album art is loaded
-                    if (selectedSong.AlbumArt == null)
-                    {
-                        await selectedSong.LoadAlbumArtAsync();
-                    }
-
-                    // Update now playing bar
+                    // Update UI elements
                     NowPlayingTitle.Text = song.Title;
                     NowPlayingArtist.Text = song.Artist;
-                    NowPlayingImage.Source = song.AlbumArt;
-                    PlayButton.Content = "⏸";
-                }
 
-                // Refresh both views
-                PlaylistBox.Items.Refresh();
-                SongListView.ItemsSource = new List<SongInfo>(originalPlaylist);
+                    // Update now playing image only if not in detail view
+                    if (song.AlbumArt != null && SongDetailView.Visibility != Visibility.Visible)
+                    {
+                        NowPlayingImage.Source = song.AlbumArt;
+                        NowPlayingImage.Visibility = Visibility.Visible;
+                        await UpdateBackgroundImage(song.AlbumArt);
+                    }
+
+                    // Update detail view if it's visible
+                    if (SongDetailView.Visibility == Visibility.Visible)
+                    {
+                        await UpdateSongDetailView(song);
+                    }
+
+                    // Update views to reflect changes
+                    UpdateViews();
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error updating UI: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error updating now playing info: {ex.Message}");
+            }
+        }
+
+        private async Task UpdateSongDetailView(SongInfo song)
+        {
+            try
+            {
+                // Update text content
+                DetailTitleText.Text = song.Title;
+                DetailArtistText.Text = song.Artist;
+                DetailAlbumText.Text = song.Album;
+
+                // Clear artist image first
+                DetailArtistImage.Source = null;
+                DetailArtistImageBrush.ImageSource = null;
+
+                // Update album art and background
+                if (song.AlbumArt != null)
+                {
+                    DetailAlbumArtImage.Source = song.AlbumArt;
+                    await UpdateBackgroundImage(song.AlbumArt);
+                }
+                else
+                {
+                    await LoadAlbumArtAsync(song);
+                }
+
+                // Load artist image if available
+                if (!string.IsNullOrEmpty(song.Artist) && song.Artist != "Unknown Artist")
+                {
+                    var artistImage = await LoadArtistImageAsync(song.Artist);
+                    if (artistImage != null)
+                    {
+                        DetailArtistImage.Source = artistImage;
+                        DetailArtistImageBrush.ImageSource = artistImage;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating song detail view: {ex.Message}");
             }
         }
 
@@ -322,91 +431,34 @@ namespace MusicPlayer.Views
 
         private void MediaPlayer_MediaEnded(object sender, EventArgs e)
         {
-            if (PlaylistBox.SelectedItem is SongInfo currentSong)
-            {
-                currentSong.IsPlaying = false;
-            }
-
             if (isRepeatEnabled)
             {
-                // If repeat is enabled, just replay the current song
-                mediaPlayer.Position = TimeSpan.Zero;
-                mediaPlayer.Play();
+                PlayMedia(); // Replay current song
+                return;
             }
-            else if (isShuffleEnabled)
-            {
-                // If shuffle is enabled, play a random song
-                var currentIndex = PlaylistBox.SelectedIndex;
-                var remainingIndices = Enumerable.Range(0, PlaylistBox.Items.Count)
-                    .Where(i => i != currentIndex)
-                    .ToList();
 
-                if (remainingIndices.Any())
-                {
-                    var randomIndex = remainingIndices[random.Next(remainingIndices.Count)];
-                    PlaylistBox.SelectedIndex = randomIndex;
-                    // Refresh song details if detail view is visible
-                    if (SongDetailView.Visibility == Visibility.Visible)
-                    {
-                        ShowSongDetails(PlaylistBox.Items[randomIndex] as SongInfo);
-                    }
-                }
-                else
-                {
-                    // If no more songs, stop playback
-                    mediaPlayer.Stop();
-                    PlayButton.Content = "▶";
-                    timer.Stop();
-                }
-            }
-            else if (PlaylistBox.SelectedIndex < PlaylistBox.Items.Count - 1)
+            if (isShuffleEnabled)
             {
-                // Normal sequential playback
-                PlaylistBox.SelectedIndex++;
-                // Refresh song details if detail view is visible
-                if (SongDetailView.Visibility == Visibility.Visible)
-                {
-                    ShowSongDetails(PlaylistBox.Items[PlaylistBox.SelectedIndex] as SongInfo);
-                }
+                PlayNextShuffledSong();
+                return;
+            }
+
+            var currentViewList = GetCurrentSongList();
+            int nextIndex = currentViewList.IndexOf(CurrentSong) + 1;
+
+            if (nextIndex >= currentViewList.Count)
+            {
+                nextIndex = 0; // Loop back to start
+            }
+
+            if (nextIndex < currentViewList.Count)
+            {
+                CurrentSong = currentViewList[nextIndex];
+                PlayMedia();
             }
             else
             {
-                // End of playlist reached
-                mediaPlayer.Stop();
-                PlayButton.Content = "▶";
-                timer.Stop();
-            }
-        }
-
-        private void PlaylistBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (PlaylistBox.SelectedItem is SongInfo selectedSong)
-            {
-                try
-                {
-                    // Only update UI if the selected song is different from the currently playing song
-                    bool isCurrentlyPlaying = selectedSong.IsPlaying;
-
-                    // Reset previous playing song indicators
-                    foreach (var s in originalPlaylist)
-                    {
-                        s.IsPlaying = false;
-                    }
-
-                    // Only start playing if no song is currently playing
-                    if (!isCurrentlyPlaying)
-                    {
-                        PlayMedia();
-                    }
-
-                    // Refresh both views to update UI
-                    PlaylistBox.Items.Refresh();
-                    SongListView.Items.Refresh();
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error handling playlist selection: {ex.Message}");
-                }
+                StopAndCleanupAudio();
             }
         }
 
@@ -438,33 +490,44 @@ namespace MusicPlayer.Views
             {
                 // If repeat is enabled, restart the current song
                 mediaPlayer.Position = TimeSpan.Zero;
+                PlayMedia();
+                return;
             }
-            else if (isShuffleEnabled)
-            {
-                // If shuffle is enabled, play a random previous song
-                var currentIndex = PlaylistBox.SelectedIndex;
-                var previousIndices = Enumerable.Range(0, currentIndex).ToList();
 
-                if (previousIndices.Any())
-                {
-                    var randomIndex = previousIndices[random.Next(previousIndices.Count)];
-                    PlaylistBox.SelectedIndex = randomIndex;
-                    // Update detail view if visible
-                    if (SongDetailView.Visibility == Visibility.Visible)
-                    {
-                        ShowSongDetails(PlaylistBox.Items[randomIndex] as SongInfo);
-                    }
-                }
-            }
-            else if (PlaylistBox.SelectedIndex > 0)
+            if (isShuffleEnabled)
             {
-                // Normal sequential navigation
-                PlaylistBox.SelectedIndex--;
-                // Update detail view if visible
-                if (SongDetailView.Visibility == Visibility.Visible)
-                {
-                    ShowSongDetails(PlaylistBox.Items[PlaylistBox.SelectedIndex] as SongInfo);
-                }
+                PlayPreviousShuffledSong();
+                return;
+            }
+
+            var currentViewList = GetCurrentSongList();
+            int prevIndex = currentViewList.IndexOf(CurrentSong) - 1;
+
+            if (prevIndex < 0)
+            {
+                prevIndex = currentViewList.Count - 1; // Loop to end
+            }
+
+            if (prevIndex >= 0 && prevIndex < currentViewList.Count)
+            {
+                CurrentSong = currentViewList[prevIndex];
+                PlayMedia();
+            }
+        }
+
+        private void PlayPreviousShuffledSong()
+        {
+            var currentViewList = GetCurrentSongList();
+            var previousSongs = currentViewList
+                .Where(s => s != CurrentSong)
+                .OrderBy(x => random.Next())
+                .ToList();
+
+            if (previousSongs.Any())
+            {
+                CurrentSong = previousSongs.First();
+                CurrentSongIndex = currentViewList.IndexOf(CurrentSong);
+                PlayMedia();
             }
         }
 
@@ -472,35 +535,28 @@ namespace MusicPlayer.Views
         {
             if (isRepeatEnabled)
             {
-                // If repeat is enabled, restart the current song
-                mediaPlayer.Position = TimeSpan.Zero;
+                PlayMedia(); // Replay current song
+                return;
             }
-            else if (isShuffleEnabled)
-            {
-                // If shuffle is enabled, play a random next song
-                var currentIndex = PlaylistBox.SelectedIndex;
-                var nextIndices = Enumerable.Range(currentIndex + 1, PlaylistBox.Items.Count - currentIndex - 1).ToList();
 
-                if (nextIndices.Any())
-                {
-                    var randomIndex = nextIndices[random.Next(nextIndices.Count)];
-                    PlaylistBox.SelectedIndex = randomIndex;
-                    // Update detail view if visible
-                    if (SongDetailView.Visibility == Visibility.Visible)
-                    {
-                        ShowSongDetails(PlaylistBox.Items[randomIndex] as SongInfo);
-                    }
-                }
-            }
-            else if (PlaylistBox.SelectedIndex < PlaylistBox.Items.Count - 1)
+            if (isShuffleEnabled)
             {
-                // Normal sequential navigation
-                PlaylistBox.SelectedIndex++;
-                // Update detail view if visible
-                if (SongDetailView.Visibility == Visibility.Visible)
-                {
-                    ShowSongDetails(PlaylistBox.Items[PlaylistBox.SelectedIndex] as SongInfo);
-                }
+                PlayNextShuffledSong();
+                return;
+            }
+
+            var currentViewList = GetCurrentSongList();
+            int nextIndex = currentViewList.IndexOf(CurrentSong) + 1;
+
+            if (nextIndex >= currentViewList.Count)
+            {
+                nextIndex = 0; // Loop back to start
+            }
+
+            if (nextIndex < currentViewList.Count)
+            {
+                CurrentSong = currentViewList[nextIndex];
+                PlayMedia();
             }
         }
 
@@ -546,18 +602,58 @@ namespace MusicPlayer.Views
             var frameworkElement = sender as FrameworkElement;
             if (frameworkElement?.DataContext is SongInfo song)
             {
-                // If the song is already playing, just show details
-                if (song.IsPlaying)
+                // If clicking the currently playing song, just show details
+                if (song == CurrentSong && song.IsPlaying)
                 {
                     ShowSongDetails(song);
+                    return;
                 }
-                // Otherwise, select it in playlist and play it
-                else
+
+                // Reset previous playing song indicators
+                foreach (var s in CurrentPlaylist)
                 {
-                    PlaylistBox.SelectedItem = song;
-                    ShowSongDetails(song);
-                    PlayMedia();
+                    s.IsPlaying = false;
                 }
+
+                // Get the current view's song list
+                var currentViewList = GetCurrentSongList();
+
+                // Set new song as current and update index based on the current view
+                CurrentSong = song;
+                CurrentSongIndex = currentViewList.IndexOf(song);
+
+                // Only update the original playlist if we're in AllSongs view
+                if (currentViewType == ViewType.AllSongs)
+                {
+                    originalPlaylist = new List<SongInfo>(currentViewList);
+                }
+
+                song.IsPlaying = true;
+
+                // Play the selected song
+                PlayMedia();
+
+                // Show song details
+                ShowSongDetails(song);
+            }
+        }
+
+        // Modify GetCurrentSongList to use the current view type
+        private List<SongInfo> GetCurrentSongList()
+        {
+            switch (currentViewType)
+            {
+                case ViewType.ArtistSongs:
+                    return originalPlaylist
+                        .Where(s => s.Artist == CurrentSong?.Artist)
+                        .ToList();
+                case ViewType.AlbumSongs:
+                    return originalPlaylist
+                        .Where(s => s.Album == CurrentSong?.Album && s.Artist == CurrentSong?.Artist)
+                        .ToList();
+                case ViewType.AllSongs:
+                default:
+                    return originalPlaylist;
             }
         }
 
@@ -590,33 +686,34 @@ namespace MusicPlayer.Views
 
             try
             {
+                // Clear previous artist image first
+                ClearArtistImage();
+
                 // Disable visualization when showing song details
                 _visualizationService?.SetActive(true);
 
-                // Create fade animations
-                var fadeOutAnimation = new DoubleAnimation
+                // Disable navigation panel completely
+                var animation = new GridLengthAnimation
                 {
-                    From = 1.0,
-                    To = 0.0,
-                    Duration = TimeSpan.FromMilliseconds(300),
+                    Duration = TimeSpan.FromMilliseconds(100),
+                    From = new GridLength(NavColumn.ActualWidth),
+                    To = new GridLength(NAV_WIDTH_HIDDEN),
                     EasingFunction = new QuadraticEase()
                 };
 
-                var fadeInAnimation = new DoubleAnimation
-                {
-                    From = 0.0,
-                    To = 1.0,
-                    Duration = TimeSpan.FromMilliseconds(300),
-                    EasingFunction = new QuadraticEase()
-                };
+                NavColumn.BeginAnimation(ColumnDefinition.WidthProperty, animation);
+                isNavigationVisible = false;
+                ToggleNavButton.Content = "☰";
+
+                // Hide navigation text
+                UpdateNavigationTextVisibility(Visibility.Collapsed);
+
+                // Create fade animations
+                var fadeOutAnimation = CreateFadeAnimation(1.0, 0.0, 300);
+                var fadeInAnimation = CreateFadeAnimation(0.0, 1.0, 300);
 
                 // Fade out current content
-                DetailAlbumArtImage.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
-                DetailBackgroundImage.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
-                DetailArtistImage.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
-                DetailTitleText.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
-                DetailArtistText.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
-                DetailAlbumText.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
+                UpdateTransitionAnimations(fadeOutAnimation);
 
                 // Wait for fade out to complete
                 await Task.Delay(300);
@@ -624,44 +721,42 @@ namespace MusicPlayer.Views
                 // Clear previous song details
                 ClearSongDetails();
 
-                // Update background with optimized method
+                // Update text content
+                UpdateDetailViewContent(song);
+
+                // Load album art
                 if (song.AlbumArt != null)
                 {
+                    DetailAlbumArtImage.Source = song.AlbumArt;
                     await UpdateBackgroundImage(song.AlbumArt);
                 }
                 else
                 {
-                    DetailAlbumArtImage.Source = song.AlbumArt;
                     await LoadAlbumArtAsync(song);
                 }
-
-                // Update text content
-                DetailTitleText.Text = song.Title;
-                DetailArtistText.Text = song.Artist;
-                DetailAlbumText.Text = song.Album;
 
                 // Load artist image if available
                 if (!string.IsNullOrEmpty(song.Artist) && song.Artist != "Unknown Artist")
                 {
-                    await LoadArtistImageAsync(song.Artist);
+                    var artistImage = await LoadArtistImageAsync(song.Artist);
+                    if (artistImage != null)
+                    {
+                        DetailArtistImage.Source = artistImage;
+                        DetailArtistImageBrush.ImageSource = artistImage;
+                    }
                 }
 
                 // Switch views if needed
                 if (SongDetailView.Visibility != Visibility.Visible)
                 {
-                    SongListView.Visibility = Visibility.Collapsed;
-                    AlbumsView.Visibility = Visibility.Collapsed;
-                    ArtistsView.Visibility = Visibility.Collapsed;
-                    SongDetailView.Visibility = Visibility.Visible;
+                    SwitchView(Visibility.Collapsed, Visibility.Collapsed, Visibility.Collapsed, Visibility.Visible);
+
+                    // Hide now playing image when entering detail view
+                    NowPlayingImage.Visibility = Visibility.Collapsed;
                 }
 
                 // Fade in new content
-                DetailAlbumArtImage.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
-                DetailBackgroundImage.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
-                DetailArtistImage.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
-                DetailTitleText.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
-                DetailArtistText.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
-                DetailAlbumText.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
+                UpdateTransitionAnimations(fadeInAnimation);
             }
             catch (Exception ex)
             {
@@ -669,25 +764,51 @@ namespace MusicPlayer.Views
             }
         }
 
+        private void UpdateTransitionAnimations(AnimationTimeline animationType)
+        {
+            DetailAlbumArtImage.BeginAnimation(UIElement.OpacityProperty, animationType);
+            DetailBackgroundImage.BeginAnimation(UIElement.OpacityProperty, animationType);
+            DetailArtistImage.BeginAnimation(UIElement.OpacityProperty, animationType);
+            DetailTitleText.BeginAnimation(UIElement.OpacityProperty, animationType);
+            DetailArtistText.BeginAnimation(UIElement.OpacityProperty, animationType);
+            DetailAlbumText.BeginAnimation(UIElement.OpacityProperty, animationType);
+        }
+
+        // Add this helper method to properly dispose of artist images
+        private void ClearArtistImage()
+        {
+            try
+            {
+                // Clear both the image source and brush
+                DetailArtistImage.Source = null;
+                DetailArtistImageBrush.ImageSource = null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error clearing artist image: {ex.Message}");
+            }
+        }
+
+        // Update the LoadArtistImageAsync method
         private async Task<BitmapImage> LoadArtistImageAsync(string artist)
         {
             try
             {
                 System.Diagnostics.Debug.WriteLine($"Loading image for artist: {artist}");
 
+                // Clear previous artist image first
+                ClearArtistImage();
+
                 // Load new artist image
                 var artistImage = await _musicMetadataService.GetArtistImageAsync(artist);
                 if (artistImage != null)
                 {
-                    DetailArtistImage.Source = artistImage;
                     System.Diagnostics.Debug.WriteLine("Artist image loaded successfully");
                     return artistImage;
                 }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine("No artist image found");
-                    return null;
-                }
+
+                System.Diagnostics.Debug.WriteLine("No artist image found");
+                return null;
             }
             catch (Exception ex)
             {
@@ -726,33 +847,48 @@ namespace MusicPlayer.Views
             // Re-enable visualization when returning to library
             _visualizationService?.SetActive(false);
 
-            // Clear song details when going back to library
-            ClearSongDetails();
+            // Restore navigation panel to its previous state (expanded or collapsed)
+            var targetWidth = isNavigationVisible ? NAV_WIDTH_EXPANDED : NAV_WIDTH_COLLAPSED;
+            var animation = new GridLengthAnimation
+            {
+                Duration = TimeSpan.FromMilliseconds(100),
+                From = new GridLength(NavColumn.ActualWidth),
+                To = new GridLength(targetWidth),
+                EasingFunction = new QuadraticEase()
+            };
+
+            NavColumn.BeginAnimation(ColumnDefinition.WidthProperty, animation);
+
+            // Update text visibility based on navigation state
+            UpdateNavigationTextVisibility(isNavigationVisible ? Visibility.Visible : Visibility.Collapsed);
 
             // Switch back to library view
             SongDetailView.Visibility = Visibility.Collapsed;
             SongListView.Visibility = Visibility.Visible;
+
+            // Show the now playing image if there's a song playing
+            if (CurrentSong != null && CurrentSong.AlbumArt != null)
+            {
+                NowPlayingImage.Source = CurrentSong.AlbumArt;
+                NowPlayingImage.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                NowPlayingImage.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void ViewSongs_Click(object sender, RoutedEventArgs e)
         {
-            SongListView.Visibility = Visibility.Visible;
-            AlbumsView.Visibility = Visibility.Collapsed;
-            ArtistsView.Visibility = Visibility.Collapsed;
-            SongDetailView.Visibility = Visibility.Collapsed;
-
-            // Always show all songs in Songs view
+            SwitchView(Visibility.Visible, Visibility.Collapsed, Visibility.Collapsed, Visibility.Collapsed);
+            currentViewType = ViewType.AllSongs;
             SongListView.ItemsSource = originalPlaylist;
         }
 
         private async void ViewAlbums_Click(object sender, RoutedEventArgs e)
         {
-            SongListView.Visibility = Visibility.Collapsed;
-            AlbumsView.Visibility = Visibility.Visible;
-            ArtistsView.Visibility = Visibility.Collapsed;
-            SongDetailView.Visibility = Visibility.Collapsed;
-
-            var albums = await _cacheService.GetAlbumGroupsAsync(PlaylistBox.Items.Cast<SongInfo>());
+            SwitchView(Visibility.Collapsed, Visibility.Visible, Visibility.Collapsed, Visibility.Collapsed);
+            var albums = await _cacheService.GetAlbumGroupsAsync(CurrentPlaylist);
             AlbumsView.ItemsSource = albums;
         }
 
@@ -760,12 +896,8 @@ namespace MusicPlayer.Views
         {
             try
             {
-                SongListView.Visibility = Visibility.Collapsed;
-                AlbumsView.Visibility = Visibility.Collapsed;
-                ArtistsView.Visibility = Visibility.Visible;
-                SongDetailView.Visibility = Visibility.Collapsed;
-
-                var artists = await _cacheService.GetArtistGroupsAsync(PlaylistBox.Items.Cast<SongInfo>());
+                SwitchView(Visibility.Collapsed, Visibility.Collapsed, Visibility.Visible, Visibility.Collapsed);
+                var artists = await _cacheService.GetArtistGroupsAsync(CurrentPlaylist);
                 ArtistsView.ItemsSource = artists;
 
                 // Fetch artist images asynchronously
@@ -833,10 +965,10 @@ namespace MusicPlayer.Views
             {
                 // Update Songs View
                 SongListView.ItemsSource = null;
-                SongListView.ItemsSource = originalPlaylist;
+                SongListView.ItemsSource = CurrentPlaylist;
 
                 // Update Albums View with proper song count
-                var albumGroups = originalPlaylist
+                var albumGroups = CurrentPlaylist
                     .GroupBy(s => new { s.Album, s.Artist })
                     .Select(g => new AlbumInfo
                     {
@@ -850,7 +982,7 @@ namespace MusicPlayer.Views
                 AlbumsView.ItemsSource = albumGroups;
 
                 // Update Artists View with proper song count
-                var artistGroups = originalPlaylist
+                var artistGroups = CurrentPlaylist
                     .GroupBy(s => s.Artist)
                     .Select(g => new ArtistInfo
                     {
@@ -861,13 +993,6 @@ namespace MusicPlayer.Views
                     })
                     .ToList();
                 ArtistsView.ItemsSource = artistGroups;
-
-                // Keep PlaylistBox in sync
-                PlaylistBox.Items.Clear();
-                foreach (var song in originalPlaylist)
-                {
-                    PlaylistBox.Items.Add(song);
-                }
             }
             catch (Exception ex)
             {
@@ -877,13 +1002,10 @@ namespace MusicPlayer.Views
 
         private void AddSongToPlaylist(string filePath)
         {
-            if (!originalPlaylist.Any(s => s.FilePath == filePath))
+            if (!CurrentPlaylist.Any(s => s.FilePath == filePath))
             {
                 var songInfo = new SongInfo(filePath);
                 originalPlaylist.Add(songInfo);
-                PlaylistBox.Items.Add(songInfo);
-
-                // Update all views
                 UpdateViews();
             }
         }
@@ -964,6 +1086,7 @@ namespace MusicPlayer.Views
                 .ToList();
 
             // Update Songs view with filtered songs
+            currentViewType = ViewType.ArtistSongs;
             SongListView.ItemsSource = artistSongs;
 
             // Switch to Songs view
@@ -983,6 +1106,7 @@ namespace MusicPlayer.Views
                 .ToList();
 
             // Update Songs view with filtered songs
+            currentViewType = ViewType.AlbumSongs;
             SongListView.ItemsSource = albumSongs;
 
             // Switch to Songs view
@@ -994,12 +1118,7 @@ namespace MusicPlayer.Views
 
         private void ViewPlaylist_Click(object sender, RoutedEventArgs e)
         {
-            SongListView.Visibility = Visibility.Visible;
-            AlbumsView.Visibility = Visibility.Collapsed;
-            ArtistsView.Visibility = Visibility.Collapsed;
-            SongDetailView.Visibility = Visibility.Collapsed;
-
-            // Show upcoming songs in order
+            SwitchView(Visibility.Visible, Visibility.Collapsed, Visibility.Collapsed, Visibility.Collapsed);
             var upcomingPlaylist = GetUpcomingPlaylist();
             SongListView.ItemsSource = upcomingPlaylist;
         }
@@ -1007,7 +1126,7 @@ namespace MusicPlayer.Views
         private List<SongInfo> GetUpcomingPlaylist()
         {
             var playlist = new List<SongInfo>();
-            var currentIndex = PlaylistBox.SelectedIndex;
+            var currentIndex = CurrentSongIndex;
 
             if (currentIndex == -1) return playlist;
 
@@ -1015,11 +1134,11 @@ namespace MusicPlayer.Views
             if (isShuffleEnabled)
             {
                 var remainingSongs = new List<SongInfo>();
-                for (int i = 0; i < PlaylistBox.Items.Count; i++)
+                for (int i = 0; i < CurrentPlaylist.Count; i++)
                 {
                     if (i != currentIndex)
                     {
-                        remainingSongs.Add(PlaylistBox.Items[i] as SongInfo);
+                        remainingSongs.Add(CurrentPlaylist[i]);
                     }
                 }
 
@@ -1028,15 +1147,15 @@ namespace MusicPlayer.Views
                 var shuffledSongs = remainingSongs.OrderBy(x => rng.Next()).ToList();
 
                 // Add current song at the beginning
-                playlist.Add(PlaylistBox.Items[currentIndex] as SongInfo);
+                playlist.Add(CurrentPlaylist[currentIndex]);
                 playlist.AddRange(shuffledSongs);
             }
             else
             {
                 // Add songs in order starting from current
-                for (int i = currentIndex; i < PlaylistBox.Items.Count; i++)
+                for (int i = currentIndex; i < CurrentPlaylist.Count; i++)
                 {
-                    playlist.Add(PlaylistBox.Items[i] as SongInfo);
+                    playlist.Add(CurrentPlaylist[i]);
                 }
 
                 // If repeat is enabled, add songs from beginning
@@ -1044,7 +1163,7 @@ namespace MusicPlayer.Views
                 {
                     for (int i = 0; i < currentIndex; i++)
                     {
-                        playlist.Add(PlaylistBox.Items[i] as SongInfo);
+                        playlist.Add(CurrentPlaylist[i]);
                     }
                 }
             }
@@ -1095,7 +1214,7 @@ namespace MusicPlayer.Views
             UpdateRepeatButtonStyle();
 
             // If we're in playlist view, refresh it
-            if (SongListView.IsVisible && SongListView.ItemsSource != originalPlaylist)
+            if (SongListView.IsVisible && SongListView.ItemsSource != CurrentPlaylist)
             {
                 ViewPlaylist_Click(sender, e);
             }
@@ -1117,9 +1236,9 @@ namespace MusicPlayer.Views
 
         private void NowPlaying_Click(object sender, MouseButtonEventArgs e)
         {
-            if (PlaylistBox.SelectedItem is SongInfo currentSong)
+            if (CurrentSong != null)
             {
-                ShowSongDetails(currentSong);
+                ShowSongDetails(CurrentSong);
             }
         }
 
@@ -1215,6 +1334,216 @@ namespace MusicPlayer.Views
             {
                 System.Diagnostics.Debug.WriteLine($"Error updating background: {ex.Message}");
             }
+        }
+
+        // Update PlayNextSong method
+        private void PlayNextSong()
+        {
+            if (originalPlaylist.Count == 0) return;
+
+            if (isRepeatEnabled && CurrentSong != null)
+            {
+                PlaySong(CurrentSong);
+                return;
+            }
+
+            // Get the current filtered playlist
+            var currentViewList = GetCurrentSongList();
+            int nextIndex = currentViewList.IndexOf(CurrentSong) + 1;
+
+            if (nextIndex >= currentViewList.Count)
+            {
+                nextIndex = 0; // Loop back to start
+            }
+
+            if (nextIndex < currentViewList.Count)
+            {
+                var nextSong = currentViewList[nextIndex];
+                PlaySong(nextSong);
+            }
+        }
+
+        // Update PlayPreviousSong method
+        private void PlayPreviousSong()
+        {
+            if (originalPlaylist.Count == 0) return;
+
+            // Get the current filtered playlist
+            var currentViewList = GetCurrentSongList();
+            int prevIndex = currentViewList.IndexOf(CurrentSong) - 1;
+
+            if (prevIndex < 0)
+            {
+                prevIndex = currentViewList.Count - 1; // Loop to end
+            }
+
+            if (prevIndex >= 0 && prevIndex < currentViewList.Count)
+            {
+                var prevSong = currentViewList[prevIndex];
+                PlaySong(prevSong);
+            }
+        }
+
+        private void PlaySong(SongInfo song)
+        {
+            if (song == null) return;
+
+            CurrentSong = song;
+            // Get the current filtered playlist based on view type
+            var currentViewList = GetCurrentSongList();
+            CurrentSongIndex = currentViewList.IndexOf(song);
+
+            // Update UI to show current song is playing
+            foreach (var s in originalPlaylist)
+            {
+                s.IsPlaying = (s == song);
+            }
+
+            // Play the song
+            mediaPlayer.Open(new Uri(song.FilePath));
+            mediaPlayer.Play();
+            UpdateNowPlaying(song);
+
+            // If in detail view, update with transitions
+            if (SongDetailView.Visibility == Visibility.Visible)
+            {
+                ShowSongDetails(song);
+            }
+
+            UpdateViews();
+        }
+
+        private void PlayNextShuffledSong()
+        {
+            // Get the current filtered playlist
+            var currentViewList = GetCurrentSongList();
+            var remainingSongs = currentViewList
+                .Where(s => s != CurrentSong)
+                .OrderBy(x => random.Next())
+                .ToList();
+
+            if (remainingSongs.Any())
+            {
+                CurrentSong = remainingSongs.First();
+                CurrentSongIndex = currentViewList.IndexOf(CurrentSong);
+                PlayMedia();
+            }
+            else
+            {
+                // If no more songs, stop playback
+                mediaPlayer.Stop();
+                PlayButton.Content = "▶";
+                timer.Stop();
+            }
+        }
+
+        private void ToggleNavigation_Click(object sender, RoutedEventArgs e)
+        {
+            if (SongDetailView.Visibility == Visibility.Visible)
+            {
+                // Don't toggle if in detail view
+                return;
+            }
+
+            isNavigationVisible = !isNavigationVisible;
+            var targetWidth = isNavigationVisible ? NAV_WIDTH_EXPANDED : NAV_WIDTH_COLLAPSED;
+
+            // Create animation for GridLength
+            var animation = new GridLengthAnimation
+            {
+                Duration = TimeSpan.FromMilliseconds(250),
+                From = new GridLength(NavColumn.ActualWidth),
+                To = new GridLength(targetWidth),
+                EasingFunction = new QuadraticEase()
+            };
+
+            // Update visibility of text
+            UpdateNavigationTextVisibility(isNavigationVisible ? Visibility.Visible : Visibility.Collapsed);
+
+            // Update toggle button content
+            ToggleNavButton.Content = isNavigationVisible ? "≡" : "☰";
+
+            NavColumn.BeginAnimation(ColumnDefinition.WidthProperty, animation);
+        }
+
+        // Add this helper method to consolidate view switching logic
+        private void SwitchView(Visibility songList, Visibility albums, Visibility artists, Visibility details)
+        {
+            SongListView.Visibility = songList;
+            AlbumsView.Visibility = albums;
+            ArtistsView.Visibility = artists;
+            SongDetailView.Visibility = details;
+        }
+
+        // Add helper method for creating animations
+        private DoubleAnimation CreateFadeAnimation(double from, double to, double durationMs)
+        {
+            return new DoubleAnimation
+            {
+                From = from,
+                To = to,
+                Duration = TimeSpan.FromMilliseconds(durationMs),
+                EasingFunction = new QuadraticEase()
+            };
+        }
+
+        private GridLengthAnimation CreateGridLengthAnimation(GridLength from, GridLength to, double durationMs)
+        {
+            return new GridLengthAnimation
+            {
+                Duration = TimeSpan.FromMilliseconds(durationMs),
+                From = from,
+                To = to,
+                EasingFunction = new QuadraticEase()
+            };
+        }
+
+        // Add helper method for updating detail view elements
+        private void UpdateDetailViewContent(SongInfo song)
+        {
+            DetailTitleText.Text = song?.Title ?? string.Empty;
+            DetailArtistText.Text = song?.Artist ?? string.Empty;
+            DetailAlbumText.Text = song?.Album ?? string.Empty;
+            DetailAlbumArtImage.Source = song?.AlbumArt;
+        }
+
+        // Use this helper in ShowSongDetails and UpdateSongDetailView
+
+        // Add helper method for common playback operations
+        private void UpdatePlaybackState(bool isPlaying)
+        {
+            PlayButton.Content = isPlaying ? "⏸" : "▶";
+            if (isPlaying)
+            {
+                timer.Start();
+                mediaPlayer.Play();
+            }
+            else
+            {
+                timer.Stop();
+                mediaPlayer.Pause();
+            }
+        }
+
+        // Use this in PlayButton_Click and other playback control methods
+
+        // Add helper method for updating background images
+        private void UpdateBackgroundImages(ImageSource source)
+        {
+            MainBackgroundImage.Source = source;
+            DetailBackgroundImage.Source = source;
+        }
+
+        // Use this helper instead of setting sources individually
+
+        private void UpdateNavigationTextVisibility(Visibility visibility)
+        {
+            AddFilesText.Visibility = visibility;
+            AddFolderText.Visibility = visibility;
+            SongsText.Visibility = visibility;
+            ArtistsText.Visibility = visibility;
+            AlbumsText.Visibility = visibility;
+            PlaylistText.Visibility = visibility;
         }
     }
 }
