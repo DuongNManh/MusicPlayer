@@ -7,11 +7,13 @@
         xmlns:converters="clr-namespace:MusicPlayer.Converters"
         mc:Ignorable="d"
         Title="Music Player"
-        Height="800"
+        Height="900"
         Width="1200"
-        MinHeight="600"
-        MinWidth="800"
-        Background="#FF282828">
+        MinHeight="900"
+        MinWidth="1000"
+        Background="#FF282828"
+        WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/MusicPlayer;component/Assets/music_player.ico">
     <Window.Resources>
         <converters:InverseVisibilityConverter x:Key="InverseVisibilityConverter"/>
         <converters:VisibilityToWidthConverter x:Key="WidthConverter"/>
@@ -160,8 +162,7 @@
                                                     <Ellipse Fill="White"
                                                              Width="12"
                                                              Height="12"
-                                                             Margin="3"
-                                                             />
+                                                             Margin="3"/>
                                                 </ControlTemplate>
                                             </Thumb.Template>
                                         </Thumb>
