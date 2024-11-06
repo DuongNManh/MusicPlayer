@@ -844,7 +844,7 @@ namespace MusicPlayer.Views
 
         private void BackToLibrary_Click(object sender, RoutedEventArgs e)
         {
-            // Re-enable visualization when returning to library
+            // close visualization when returning to library
             _visualizationService?.SetActive(false);
 
             // Restore navigation panel to its previous state (expanded or collapsed)
@@ -1336,53 +1336,53 @@ namespace MusicPlayer.Views
             }
         }
 
-        // Update PlayNextSong method
-        private void PlayNextSong()
-        {
-            if (originalPlaylist.Count == 0) return;
+        //// Update PlayNextSong method
+        //private void PlayNextSong()
+        //{
+        //    if (originalPlaylist.Count == 0) return;
 
-            if (isRepeatEnabled && CurrentSong != null)
-            {
-                PlaySong(CurrentSong);
-                return;
-            }
+        //    if (isRepeatEnabled && CurrentSong != null)
+        //    {
+        //        PlaySong(CurrentSong);
+        //        return;
+        //    }
 
-            // Get the current filtered playlist
-            var currentViewList = GetCurrentSongList();
-            int nextIndex = currentViewList.IndexOf(CurrentSong) + 1;
+        //    // Get the current filtered playlist
+        //    var currentViewList = GetCurrentSongList();
+        //    int nextIndex = currentViewList.IndexOf(CurrentSong) + 1;
 
-            if (nextIndex >= currentViewList.Count)
-            {
-                nextIndex = 0; // Loop back to start
-            }
+        //    if (nextIndex >= currentViewList.Count)
+        //    {
+        //        nextIndex = 0; // Loop back to start
+        //    }
 
-            if (nextIndex < currentViewList.Count)
-            {
-                var nextSong = currentViewList[nextIndex];
-                PlaySong(nextSong);
-            }
-        }
+        //    if (nextIndex < currentViewList.Count)
+        //    {
+        //        var nextSong = currentViewList[nextIndex];
+        //        PlaySong(nextSong);
+        //    }
+        //}
 
-        // Update PlayPreviousSong method
-        private void PlayPreviousSong()
-        {
-            if (originalPlaylist.Count == 0) return;
+        //// Update PlayPreviousSong method
+        //private void PlayPreviousSong()
+        //{
+        //    if (originalPlaylist.Count == 0) return;
 
-            // Get the current filtered playlist
-            var currentViewList = GetCurrentSongList();
-            int prevIndex = currentViewList.IndexOf(CurrentSong) - 1;
+        //    // Get the current filtered playlist
+        //    var currentViewList = GetCurrentSongList();
+        //    int prevIndex = currentViewList.IndexOf(CurrentSong) - 1;
 
-            if (prevIndex < 0)
-            {
-                prevIndex = currentViewList.Count - 1; // Loop to end
-            }
+        //    if (prevIndex < 0)
+        //    {
+        //        prevIndex = currentViewList.Count - 1; // Loop to end
+        //    }
 
-            if (prevIndex >= 0 && prevIndex < currentViewList.Count)
-            {
-                var prevSong = currentViewList[prevIndex];
-                PlaySong(prevSong);
-            }
-        }
+        //    if (prevIndex >= 0 && prevIndex < currentViewList.Count)
+        //    {
+        //        var prevSong = currentViewList[prevIndex];
+        //        PlaySong(prevSong);
+        //    }
+        //}
 
         private void PlaySong(SongInfo song)
         {
@@ -1487,16 +1487,16 @@ namespace MusicPlayer.Views
             };
         }
 
-        private GridLengthAnimation CreateGridLengthAnimation(GridLength from, GridLength to, double durationMs)
-        {
-            return new GridLengthAnimation
-            {
-                Duration = TimeSpan.FromMilliseconds(durationMs),
-                From = from,
-                To = to,
-                EasingFunction = new QuadraticEase()
-            };
-        }
+        //private GridLengthAnimation CreateGridLengthAnimation(GridLength from, GridLength to, double durationMs)
+        //{
+        //    return new GridLengthAnimation
+        //    {
+        //        Duration = TimeSpan.FromMilliseconds(durationMs),
+        //        From = from,
+        //        To = to,
+        //        EasingFunction = new QuadraticEase()
+        //    };
+        //}
 
         // Add helper method for updating detail view elements
         private void UpdateDetailViewContent(SongInfo song)
@@ -1510,29 +1510,29 @@ namespace MusicPlayer.Views
         // Use this helper in ShowSongDetails and UpdateSongDetailView
 
         // Add helper method for common playback operations
-        private void UpdatePlaybackState(bool isPlaying)
-        {
-            PlayButton.Content = isPlaying ? "⏸" : "▶";
-            if (isPlaying)
-            {
-                timer.Start();
-                mediaPlayer.Play();
-            }
-            else
-            {
-                timer.Stop();
-                mediaPlayer.Pause();
-            }
-        }
+        //private void UpdatePlaybackState(bool isPlaying)
+        //{
+        //    PlayButton.Content = isPlaying ? "⏸" : "▶";
+        //    if (isPlaying)
+        //    {
+        //        timer.Start();
+        //        mediaPlayer.Play();
+        //    }
+        //    else
+        //    {
+        //        timer.Stop();
+        //        mediaPlayer.Pause();
+        //    }
+        //}
 
-        // Use this in PlayButton_Click and other playback control methods
+        //// Use this in PlayButton_Click and other playback control methods
 
-        // Add helper method for updating background images
-        private void UpdateBackgroundImages(ImageSource source)
-        {
-            MainBackgroundImage.Source = source;
-            DetailBackgroundImage.Source = source;
-        }
+        //// Add helper method for updating background images
+        //private void UpdateBackgroundImages(ImageSource source)
+        //{
+        //    MainBackgroundImage.Source = source;
+        //    DetailBackgroundImage.Source = source;
+        //}
 
         // Use this helper instead of setting sources individually
 
