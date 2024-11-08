@@ -14,7 +14,7 @@
         Background="#FF282828"
         WindowStartupLocation="CenterScreen"
         Icon="pack://application:,,,/MusicPlayer;component/Assets/music_player.ico">
-    
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="40"/>
@@ -30,6 +30,7 @@
               Background="#FF181818">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -41,8 +42,15 @@
                     HorizontalAlignment="Left"
                     Width="30"
                     Height="30"/>
+            <Button x:Name="SortButton"
+                     Grid.Column="1"
+        Content="Sort by Title"
+        Click="SortButton_Click"
+        Style="{StaticResource TransparentButton}"
+        HorizontalAlignment="Right"
+        Padding="10,5"/>
 
-            <TextBox Grid.Column="1"
+            <TextBox Grid.Column="2"
                      Margin="380,10,380,10"
                      Background="#FF383838"
                      Foreground="White"

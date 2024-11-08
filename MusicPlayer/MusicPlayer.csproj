@@ -10,7 +10,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <None Remove="Assets\music_player.ico" />
+		<None Remove="Assets\music_player.ico" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -22,12 +22,11 @@
 
 	<ItemGroup>
 		<Folder Include="Resources\" />
-
 	</ItemGroup>
 
 	<ItemGroup>
 		<Resource Include="Assets\music_player.ico">
-		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</Resource>
 		<Resource Include="Resources\default_song.png" />
 		<Resource Include="Resources\default_album.png" />
